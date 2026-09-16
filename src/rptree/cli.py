@@ -16,6 +16,7 @@ def main():
         args.hidden,
         args.show_type,
         args.show_size,
+        args.search,
     )
 
 def generate_tree(
@@ -26,6 +27,7 @@ def generate_tree(
     hidden,
     show_type,
     show_size,
+    search,
 ):
     root_dir = pathlib.Path(root_dir)
 
@@ -44,7 +46,8 @@ def generate_tree(
         dirs_only=dirs,
         hidden=hidden,
         show_type=show_type,
-        show_size=show_size
+        show_size=show_size,
+        search=search
     )
     tree.generate()
 
@@ -117,6 +120,11 @@ def parse_cmd_line_arguments():
         action="store_true",
         dest="show_size",
         help="show file sizes",
+    )
+
+    parser.add_argument(
+        "--search",
+        help="show only files matching the search term",
     )
 
     return parser.parse_args()

@@ -68,6 +68,7 @@ class DirectoryTree:
         hidden: bool = False,
         show_type: bool = False,
         show_size: bool = False,
+        search: str | None = None,
     ):
         self._generator = _TreeGenerator(
             root_dir,
@@ -76,7 +77,8 @@ class DirectoryTree:
             dirs_only,
             hidden,
             show_type,
-            show_size
+            show_size,
+            search
         )
 
 
@@ -100,14 +102,16 @@ class _TreeGenerator:
         hidden: bool = False,
         show_type: bool = False,
         show_size: bool = False,
+        search: str | None = None,
     ):
         self._root_dir = pathlib.Path(root_dir)
         self._depth = depth
         self._files_only = files_only
         self._dirs_only = dirs_only
         self._hidden = hidden
-        self.show_type = show_type
-        self.show_size = show_size
+        self._show_type = show_type
+        self._show_size = show_size
+        self._search = search
         self._tree: list[str] = []
 
 
@@ -144,6 +148,19 @@ class _TreeGenerator:
         )
 
         visible_entries = self._get_visible_entries(entries)
+
+        if self._search is not None:
+            visible_entries = [
+                entry
+                for entry in visible_entries
+                if (
+                    entry.is_file() and self._matches_search(entry)
+                )
+                or (
+                    entry.is_dir()
+                    and self._directory_contains_match(entry)
+                )
+            ]
 
         for entry in entries:
             if entry.is_dir():
@@ -250,11 +267,11 @@ class _TreeGenerator:
 
         file_name = file.name
 
-        if self.show_type:
+        if self._show_type:
             file_type = get_file_type(file)
             file_name += f" [{file_type}] "
 
-        if self.show_size:
+        if self._show_size:
             file_size = get_file_size(file)
             file_name += f" [{file_size}] "
 
@@ -333,3 +350,27 @@ class _TreeGenerator:
 
         return entries
 
+
+    def _matches_search(self, entry: pathlib.Path) -> bool:
+        """Return whether an entry matches the search term."""
+
+        if self._search is None:
+            return True
+
+        return self._search.lower() in entry.name.lower()
+
+
+    def _directory_contains_match(self, directory: pathlib.Path) -> bool:
+        """Return whether a directory or anything inside it matches the search term."""
+
+        if self._matches_search(directory):
+            return True
+
+        for entry in directory.iterdir():
+            if entry.is_file() and self._matches_search(entry):
+                return True
+
+            if entry.is_dir() and self._directory_contains_match(entry):
+                return True
+
+        return False

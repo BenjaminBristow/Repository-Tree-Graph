@@ -765,3 +765,433 @@ def test_cli_type_and_size(capsys, monkeypatch, tmp_path):
     captured = capsys.readouterr()
 
     assert "example.py [Python]  [2.0 KB]" in captured.out
+
+
+
+# Tests that a filename matching the search term returns True.
+def test_search_matches_filename(tmp_path):
+    file = tmp_path / "database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="data")
+
+    assert tree._generator._matches_search(file) is True
+
+
+
+# Tests that a filename not matching the search term returns False.
+def test_search_does_not_match_filename(tmp_path):
+    file = tmp_path / "database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="python")
+
+    assert tree._generator._matches_search(file) is False
+
+
+
+# Tests that search matching is case-insensitive.
+def test_search_is_case_insensitive(tmp_path):
+    file = tmp_path / "Database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+
+    assert tree._generator._matches_search(file) is True
+
+
+
+# Tests that every entry matches when no search term is provided.
+def test_search_disabled_matches_everything(tmp_path):
+    file = tmp_path / "database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path)
+
+    assert tree._generator._matches_search(file) is True
+
+
+
+# Tests that a filename matching the search term returns True.
+def test_search_matches_filename(tmp_path):
+    file = tmp_path / "database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="data")
+
+    assert tree._generator._matches_search(file) is True
+
+
+
+# Tests that a filename not matching the search term returns False.
+def test_search_does_not_match_filename(tmp_path):
+    file = tmp_path / "database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="python")
+
+    assert tree._generator._matches_search(file) is False
+
+
+
+# Tests that search matching is case-insensitive.
+def test_search_is_case_insensitive(tmp_path):
+    file = tmp_path / "Database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+
+    assert tree._generator._matches_search(file) is True
+
+
+
+# Tests that every entry matches when no search term is provided.
+def test_search_disabled_matches_everything(tmp_path):
+    file = tmp_path / "database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path)
+
+    assert tree._generator._matches_search(file) is True
+
+
+
+# Tests that a directory matches when its own name contains the search term.
+def test_search_matches_directory_name(tmp_path):
+    directory = tmp_path / "database"
+    directory.mkdir()
+
+    tree = DirectoryTree(tmp_path, search="data")
+
+    assert tree._generator._directory_contains_match(directory) is True
+
+
+
+# Tests that a directory matches when a file directly inside it matches.
+def test_search_matches_file_inside_directory(tmp_path):
+    directory = tmp_path / "src"
+    directory.mkdir()
+
+    file = directory / "database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+
+    assert tree._generator._directory_contains_match(directory) is True
+
+
+
+# Tests that a directory matches when a nested directory contains a matching file.
+def test_search_matches_nested_file(tmp_path):
+    directory = tmp_path / "src"
+    nested_directory = directory / "backend"
+    nested_directory.mkdir(parents=True)
+
+    file = nested_directory / "database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+
+    assert tree._generator._directory_contains_match(directory) is True
+
+
+
+# Tests that multiple levels of directories are kept when a deeply nested file matches.
+def test_search_keeps_all_parent_directories(tmp_path):
+    directory = (
+        tmp_path
+        / "src"
+        / "backend"
+        / "database"
+        / "models"
+    )
+    directory.mkdir(parents=True)
+
+    file = directory / "user_database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+
+    assert tree._generator._directory_contains_match(
+        tmp_path / "src"
+    ) is True
+
+
+
+# Tests that an unrelated directory does not match the search term.
+def test_search_does_not_match_unrelated_directory(tmp_path):
+    directory = tmp_path / "src"
+    directory.mkdir()
+
+    file = directory / "main.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+
+    assert tree._generator._directory_contains_match(directory) is False
+
+
+
+# Tests that only matching files are shown when searching.
+def test_search_shows_matching_files_only(tmp_path, capsys):
+    matching_file = tmp_path / "database.py"
+    matching_file.touch()
+
+    unrelated_file = tmp_path / "main.py"
+    unrelated_file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert "database.py" in captured.out
+    assert "main.py" not in captured.out
+
+
+
+# Tests that parent directories are shown when they contain a matching file.
+def test_search_shows_parent_directories(tmp_path, capsys):
+    directory = tmp_path / "src"
+    directory.mkdir()
+
+    file = directory / "database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert "src/" in captured.out
+    assert "database.py" in captured.out
+
+
+
+# Tests that deeply nested parent directories are all shown when a file matches.
+def test_search_shows_deeply_nested_parent_directories(tmp_path, capsys):
+    directory = (
+        tmp_path
+        / "src"
+        / "backend"
+        / "database"
+        / "models"
+    )
+    directory.mkdir(parents=True)
+
+    file = directory / "user_database.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert "src/" in captured.out
+    assert "backend/" in captured.out
+    assert "database/" in captured.out
+    assert "models/" in captured.out
+    assert "user_database.py" in captured.out
+
+
+
+# Tests that unrelated files inside a matching directory remain hidden.
+def test_search_hides_unrelated_files_inside_matching_directory(
+    tmp_path,
+    capsys,
+):
+    directory = tmp_path / "tests"
+    directory.mkdir()
+
+    matching_file = directory / "test_tree.py"
+    matching_file.touch()
+
+    unrelated_file = directory / "README.md"
+    unrelated_file.touch()
+
+    tree = DirectoryTree(tmp_path, search="test")
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert "tests/" in captured.out
+    assert "test_tree.py" in captured.out
+    assert "README.md" not in captured.out
+
+
+
+# Tests that unrelated directories are hidden when searching.
+def test_search_hides_unrelated_directories(tmp_path, capsys):
+    matching_directory = tmp_path / "src"
+    matching_directory.mkdir()
+
+    matching_file = matching_directory / "database.py"
+    matching_file.touch()
+
+    unrelated_directory = tmp_path / "docs"
+    unrelated_directory.mkdir()
+
+    unrelated_file = unrelated_directory / "README.md"
+    unrelated_file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert "src/" in captured.out
+    assert "database.py" in captured.out
+    assert "docs/" not in captured.out
+    assert "README.md" not in captured.out
+
+
+
+# Tests that a matching directory does not automatically show unrelated files inside it.
+def test_search_matching_directory_does_not_show_all_contents(
+    tmp_path,
+    capsys,
+):
+    directory = tmp_path / "tests"
+    directory.mkdir()
+
+    matching_file = directory / "test_tree.py"
+    matching_file.touch()
+
+    unrelated_file = directory / "example.py"
+    unrelated_file.touch()
+
+    tree = DirectoryTree(tmp_path, search="tests")
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert "tests/" in captured.out
+    assert "test_tree.py" not in captured.out
+    assert "example.py" not in captured.out
+
+
+
+# Tests that searching works correctly through the command-line interface.
+def test_cli_search(tmp_path, capsys, monkeypatch):
+    matching_file = tmp_path / "database.py"
+    matching_file.touch()
+
+    unrelated_file = tmp_path / "main.py"
+    unrelated_file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", "--search", "database", str(tmp_path)],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    assert "database.py" in captured.out
+    assert "main.py" not in captured.out
+
+
+
+# Tests that search works together with the file type option.
+def test_cli_search_and_type(tmp_path, capsys, monkeypatch):
+    matching_file = tmp_path / "database.py"
+    matching_file.touch()
+
+    unrelated_file = tmp_path / "main.py"
+    unrelated_file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", "--search", "database", "--type", str(tmp_path)],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    assert "database.py [Python]" in captured.out
+    assert "main.py" not in captured.out
+
+
+
+# Tests that search works together with the file size option.
+def test_cli_search_and_size(tmp_path, capsys, monkeypatch):
+    matching_file = tmp_path / "database.py"
+    matching_file.write_bytes(b"a" * 2048)
+
+    unrelated_file = tmp_path / "main.py"
+    unrelated_file.write_bytes(b"b" * 1024)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", "--search", "database", "--size", str(tmp_path)],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    assert "database.py [2.0 KB]" in captured.out
+    assert "main.py" not in captured.out
+
+
+
+# Tests that search works together with both the file type and size options.
+def test_cli_search_type_and_size(tmp_path, capsys, monkeypatch):
+    matching_file = tmp_path / "database.py"
+    matching_file.write_bytes(b"a" * 2048)
+
+    unrelated_file = tmp_path / "main.py"
+    unrelated_file.write_bytes(b"b" * 1024)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rptree",
+            "--search",
+            "database",
+            "--type",
+            "--size",
+            str(tmp_path),
+        ],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    assert "database.py [Python]  [2.0 KB]" in captured.out
+    assert "main.py" not in captured.out
+
+
+
+# Tests that hidden files are still excluded from search unless --hidden is used.
+def test_search_respects_hidden_option(tmp_path, capsys):
+    hidden_file = tmp_path / ".database.py"
+    hidden_file.touch()
+
+    tree = DirectoryTree(tmp_path, search="database")
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert ".database.py" not in captured.out
+
+
+
+# Tests that hidden matching files can be found when hidden files are enabled.
+def test_search_with_hidden_option(tmp_path, capsys):
+    hidden_file = tmp_path / ".database.py"
+    hidden_file.touch()
+
+    tree = DirectoryTree(
+        tmp_path,
+        search="database",
+        hidden=True,
+    )
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert ".database.py" in captured.out
