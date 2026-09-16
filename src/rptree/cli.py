@@ -16,12 +16,13 @@ def main():
         args.dirs,
         args.hidden,
         args.show_type,
+        args.type_filter,
         args.show_size,
         args.search,
         args.modified,
         args.json,
         args.output,
-        args.stats
+        args.stats,
     )
 
 def generate_tree(
@@ -31,6 +32,7 @@ def generate_tree(
     dirs,
     hidden,
     show_type,
+    type_filter,
     show_size,
     search,
     modified,
@@ -58,6 +60,7 @@ def generate_tree(
         show_size=show_size,
         search=search,
         modified=modified,
+        type_filter=type_filter,
     )
 
     if stats:
@@ -113,7 +116,6 @@ def parse_cmd_line_arguments():
     description="Generate a tree diagram of files and directories.",
     epilog="Thanks for using rptree!",
     )
-
 
     parser.version = f"rptree v{version('rptree')}"
 
@@ -204,6 +206,11 @@ def parse_cmd_line_arguments():
         "--stats",
         action="store_true",
         help="show file and directory statistics",
+    )
+
+    parser.add_argument(
+        "--type-filter",
+        help="Only show files of the specified type.",
     )
 
 

@@ -237,6 +237,7 @@ class DirectoryTree:
         dirs_only: bool = False,
         hidden: bool = False,
         show_type: bool = False,
+        type_filter: str | None = None,
         show_size: bool = False,
         search: str | None = None,
         modified: bool = False,
@@ -250,6 +251,7 @@ class DirectoryTree:
             dirs_only,
             hidden,
             show_type,
+            type_filter,
             show_size,
             search,
             modified,
@@ -277,6 +279,7 @@ class _TreeGenerator:
         dirs_only: bool = False,
         hidden: bool = False,
         show_type: bool = False,
+        type_filter: str | None = None,
         show_size: bool = False,
         search: str | None = None,
         modified: bool = False,
@@ -287,6 +290,7 @@ class _TreeGenerator:
         self._dirs_only = dirs_only
         self._hidden = hidden
         self._show_type = show_type
+        self._type_filter = type_filter
         self._show_size = show_size
         self._search = search
         self._modified = modified
@@ -336,8 +340,6 @@ class _TreeGenerator:
         # Apply options such as --hidden, --files and --dirs.
         visible_entries = self._get_visible_entries(entries)
 
-        # Search needs special handling because a directory must remain visible
-        # if a matching file exists somewhere inside it.
         if self._search is not None:
             visible_entries = [
                 entry
@@ -348,6 +350,19 @@ class _TreeGenerator:
                 or (
                     entry.is_dir()
                     and self._directory_contains_match(entry)
+                )
+            ]
+
+        if self._type_filter is not None:
+            visible_entries = [
+                entry
+                for entry in visible_entries
+                if (
+                    entry.is_file() and self._matches_type_filter(entry)
+                )
+                or (
+                    entry.is_dir()
+                    and self._directory_contains_type_match(entry)
                 )
             ]
 
@@ -558,6 +573,7 @@ class _TreeGenerator:
 
         return entries
 
+
     def _matches_search(self, entry: pathlib.Path) -> bool:
         """Return whether an entry matches the search term."""
 
@@ -566,6 +582,7 @@ class _TreeGenerator:
 
         # Search is case-insensitive and matches anywhere in the name.
         return self._search.lower() in entry.name.lower()
+
 
     def _directory_contains_match(
         self,
@@ -586,6 +603,35 @@ class _TreeGenerator:
                 return True
 
         return False
+
+    
+    def _matches_type_filter(self, entry: pathlib.Path) -> bool:
+        """Return whether a file matches the requested type filter."""
+
+        if self._type_filter is None:
+            return True
+
+        if not entry.is_file():
+            return False
+
+        return get_file_type(entry).lower() == self._type_filter.lower()
+
+
+    def _directory_contains_type_match(
+        self,
+        directory: pathlib.Path,
+    ) -> bool:
+        """Return whether a directory contains a file matching the type filter."""
+
+        for entry in directory.iterdir():
+            if entry.is_file() and self._matches_type_filter(entry):
+                return True
+
+            if entry.is_dir() and self._directory_contains_type_match(entry):
+                return True
+
+        return False
+
 
     def _build_json_tree(
         self,
