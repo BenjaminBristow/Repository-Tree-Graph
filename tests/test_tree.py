@@ -1,7 +1,14 @@
 from rptree.cli import main
-from rptree.tree import DirectoryTree, get_file_type, get_file_size, get_modified_time
 from importlib.metadata import version
 from datetime import datetime
+import json
+from rptree.tree import (
+    DirectoryTree,
+    _TreeGenerator,
+    get_file_type, 
+    get_file_size, 
+    get_modified_time
+)
 
 
 # Tests that an empty directory produces only the root directory and tree line.
@@ -10,7 +17,7 @@ def test_empty_directory(tmp_path):
     result = tree._generator.build_tree()
 
     assert result == [
-        f"{tmp_path}/",
+        f"{tmp_path.name}/",
         "│",
     ]
 
@@ -146,7 +153,7 @@ def test_cli_directory(capsys, monkeypatch, tmp_path):
 
     captured = capsys.readouterr()
 
-    assert f"{tmp_path}/" in captured.out
+    assert f"{tmp_path.name}/" in captured.out
     assert "├── folder/" in captured.out
     assert "└── file1.txt" in captured.out
 
@@ -1405,3 +1412,644 @@ def test_cli_type_size_modified_search(
     )
 
     assert "main.py" not in captured.out
+
+
+
+# Test that a JSON tree correctly represents a directory and its files.
+def test_build_json_tree(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    src = project / "src"
+    src.mkdir()
+
+    main_file = src / "main.py"
+    main_file.write_text("print('hello')")
+
+    readme = project / "README.md"
+    readme.write_text("# Project")
+
+    generator = _TreeGenerator(project)
+
+    result = generator._build_json_tree(project)
+
+    assert result == {
+        "name": "project",
+        "type": "directory",
+        "children": [
+            {
+                "name": "src",
+                "type": "directory",
+                "children": [
+                    {
+                        "name": "main.py",
+                        "type": "file",
+                    }
+                ],
+            },
+            {
+                "name": "README.md",
+                "type": "file",
+            },
+        ],
+    }
+
+
+
+# Test that an empty directory produces a JSON tree with no children.
+def test_build_json_tree_empty_directory(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    generator = _TreeGenerator(project)
+
+    result = generator._build_json_tree(project)
+
+    assert result == {
+        "name": "project",
+        "type": "directory",
+        "children": [],
+    }
+
+
+
+# Test that nested directories are recursively represented in the JSON tree.
+def test_build_json_tree_nested_directories(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    src = project / "src"
+    src.mkdir()
+
+    backend = src / "backend"
+    backend.mkdir()
+
+    database = backend / "database"
+    database.mkdir()
+
+    file = database / "models.py"
+    file.write_text("class User:")
+
+    generator = _TreeGenerator(project)
+
+    result = generator._build_json_tree(project)
+
+    assert result["children"][0]["name"] == "src"
+    assert result["children"][0]["children"][0]["name"] == "backend"
+    assert (
+        result["children"][0]["children"][0]["children"][0]["name"]
+        == "database"
+    )
+
+
+
+# Test that the JSON tree hides hidden files by default.
+def test_build_json_tree_hides_hidden_files(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    visible = project / "visible.py"
+    visible.write_text("print('visible')")
+
+    hidden = project / ".hidden"
+    hidden.write_text("hidden")
+
+    generator = _TreeGenerator(project)
+
+    result = generator._build_json_tree(project)
+
+    names = [child["name"] for child in result["children"]]
+
+    assert "visible.py" in names
+    assert ".hidden" not in names
+
+
+
+# Test that the JSON tree includes hidden files when hidden mode is enabled.
+def test_build_json_tree_shows_hidden_files(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    visible = project / "visible.py"
+    visible.write_text("print('visible')")
+
+    hidden = project / ".hidden"
+    hidden.write_text("hidden")
+
+    generator = _TreeGenerator(
+        project,
+        hidden=True,
+    )
+
+    result = generator._build_json_tree(project)
+
+    names = [child["name"] for child in result["children"]]
+
+    assert "visible.py" in names
+    assert ".hidden" in names
+
+
+
+# Test that the JSON tree recursively includes nested hidden files when hidden mode is enabled.
+def test_build_json_tree_shows_nested_hidden_files(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    src = project / "src"
+    src.mkdir()
+
+    hidden = src / ".config"
+    hidden.write_text("hidden")
+
+    generator = _TreeGenerator(
+        project,
+        hidden=True,
+    )
+
+    result = generator._build_json_tree(project)
+
+    src_result = result["children"][0]
+
+    assert src_result["name"] == "src"
+    assert src_result["children"][0]["name"] == ".config"
+
+
+
+# Test that JSON output with files_only includes files inside nested directories.
+def test_build_json_tree_files_only(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    src = project / "src"
+    src.mkdir()
+
+    main_file = src / "main.py"
+    main_file.write_text("print('hello')")
+
+    readme = project / "README.md"
+    readme.write_text("# Project")
+
+    generator = _TreeGenerator(
+        project,
+        files_only=True,
+    )
+
+    result = generator._build_json_tree(project)
+
+    names = [child["name"] for child in result["children"]]
+
+    assert "README.md" in names
+    assert "src" not in names
+
+
+
+# Test that JSON output with dirs_only includes directories but not files.
+def test_build_json_tree_dirs_only(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    src = project / "src"
+    src.mkdir()
+
+    readme = project / "README.md"
+    readme.write_text("# Project")
+
+    generator = _TreeGenerator(
+        project,
+        dirs_only=True,
+    )
+
+    result = generator._build_json_tree(project)
+
+    names = [child["name"] for child in result["children"]]
+
+    assert "src" in names
+    assert "README.md" not in names
+
+
+
+# Test that JSON output with files_only recursively finds files inside directories.
+def test_build_json_tree_files_only_nested(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    src = project / "src"
+    src.mkdir()
+
+    backend = src / "backend"
+    backend.mkdir()
+
+    main_file = backend / "main.py"
+    main_file.write_text("print('hello')")
+
+    generator = _TreeGenerator(
+        project,
+        files_only=True,
+    )
+
+    result = generator._build_json_tree(project)
+
+    assert result["children"] == [
+        {
+            "name": "main.py",
+            "type": "file",
+        }
+    ]
+
+
+
+# Test that JSON output with dirs_only recursively includes directories.
+def test_build_json_tree_dirs_only_nested(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    src = project / "src"
+    src.mkdir()
+
+    backend = src / "backend"
+    backend.mkdir()
+
+    main_file = backend / "main.py"
+    main_file.write_text("print('hello')")
+
+    generator = _TreeGenerator(
+        project,
+        dirs_only=True,
+    )
+
+    result = generator._build_json_tree(project)
+
+    assert result["children"][0]["name"] == "src"
+    assert result["children"][0]["type"] == "directory"
+
+    assert result["children"][0]["children"][0]["name"] == "backend"
+    assert result["children"][0]["children"][0]["type"] == "directory"
+
+    assert result["children"][0]["children"][0]["children"] == []
+
+
+
+# Test that the CLI outputs valid JSON when the --json option is used.
+def test_cli_json(capsys, monkeypatch, tmp_path):
+    file1 = tmp_path / "file1.txt"
+    folder = tmp_path / "folder"
+
+    file1.touch()
+    folder.mkdir()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", str(tmp_path), "--json"],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    assert result["name"] == tmp_path.name
+    assert result["type"] == "directory"
+    assert len(result["children"]) == 2
+
+
+
+# Test that the CLI includes hidden files when --json and --hidden are used together.
+def test_cli_json_hidden(capsys, monkeypatch, tmp_path):
+    visible_file = tmp_path / "visible.txt"
+    hidden_file = tmp_path / ".hidden.txt"
+
+    visible_file.touch()
+    hidden_file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", str(tmp_path), "--json", "--hidden"],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    names = [
+        child["name"]
+        for child in result["children"]
+    ]
+
+    assert "visible.txt" in names
+    assert ".hidden.txt" in names
+
+
+
+# Test that the CLI outputs only files when --json and --files are used together.
+def test_cli_json_files(capsys, monkeypatch, tmp_path):
+    file1 = tmp_path / "file1.txt"
+    folder = tmp_path / "folder"
+
+    file1.touch()
+    folder.mkdir()
+
+    nested_file = folder / "nested.txt"
+    nested_file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", str(tmp_path), "--json", "--files"],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    names = [
+        child["name"]
+        for child in result["children"]
+    ]
+
+    assert "file1.txt" in names
+    assert "nested.txt" in names
+    assert "folder" not in names
+
+
+
+# Test that the CLI outputs only directories when --json and --dirs are used together.
+def test_cli_json_dirs(capsys, monkeypatch, tmp_path):
+    file1 = tmp_path / "file1.txt"
+    folder = tmp_path / "folder"
+
+    file1.touch()
+    folder.mkdir()
+
+    nested_folder = folder / "nested"
+    nested_folder.mkdir()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", str(tmp_path), "--json", "--dirs"],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    names = [
+        child["name"]
+        for child in result["children"]
+    ]
+
+    assert "folder" in names
+    assert "file1.txt" not in names
+
+    nested_names = [
+        child["name"]
+        for child in result["children"][0]["children"]
+    ]
+
+    assert "nested" in nested_names
+
+
+
+# Test that the CLI includes file types when --json and --type are used together.
+def test_cli_json_type(capsys, monkeypatch, tmp_path):
+    python_file = tmp_path / "script.py"
+    text_file = tmp_path / "notes.txt"
+
+    python_file.touch()
+    text_file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", str(tmp_path), "--json", "--type"],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    children = {
+        child["name"]: child
+        for child in result["children"]
+    }
+
+    assert children["script.py"]["type"] == "file"
+    assert children["script.py"]["file_type"] == "Python"
+
+    assert children["notes.txt"]["type"] == "file"
+    assert children["notes.txt"]["file_type"] == "Text"
+
+
+
+# Test that the CLI includes file sizes when --json and --size are used together.
+def test_cli_json_size(capsys, monkeypatch, tmp_path):
+    test_file = tmp_path / "test.txt"
+    test_file.write_bytes(b"a" * 2048)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", str(tmp_path), "--json", "--size"],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    children = {
+        child["name"]: child
+        for child in result["children"]
+    }
+
+    assert children["test.txt"]["type"] == "file"
+    assert children["test.txt"]["size"] == "2.0 KB"
+
+
+
+# Test that the CLI includes file modification times when --json and --modified are used together.
+def test_cli_json_modified(capsys, monkeypatch, tmp_path):
+    test_file = tmp_path / "test.txt"
+    test_file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", str(tmp_path), "--json", "--modified"],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    children = {
+        child["name"]: child
+        for child in result["children"]
+    }
+
+    assert children["test.txt"]["type"] == "file"
+    assert "modified" in children["test.txt"]
+    assert len(children["test.txt"]["modified"]) == 16
+
+
+
+# Test that the CLI includes all file metadata when JSON and every metadata option are used together.
+def test_cli_json_all_metadata(capsys, monkeypatch, tmp_path):
+    test_file = tmp_path / "script.py"
+    test_file.write_bytes(b"a" * 2048)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rptree",
+            str(tmp_path),
+            "--json",
+            "--type",
+            "--size",
+            "--modified",
+        ],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    child = result["children"][0]
+
+    assert child["name"] == "script.py"
+    assert child["type"] == "file"
+    assert child["file_type"] == "Python"
+    assert child["size"] == "2.0 KB"
+    assert "modified" in child
+    assert len(child["modified"]) == 16
+
+
+
+# Test that the CLI applies filename searching when JSON output is enabled.
+def test_cli_json_search(capsys, monkeypatch, tmp_path):
+    matching_file = tmp_path / "important.py"
+    other_file = tmp_path / "notes.txt"
+    folder = tmp_path / "src"
+
+    matching_file.touch()
+    other_file.touch()
+    folder.mkdir()
+
+    nested_match = folder / "important_helper.py"
+    nested_other = folder / "other.py"
+
+    nested_match.touch()
+    nested_other.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rptree",
+            str(tmp_path),
+            "--json",
+            "--search",
+            "important",
+        ],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    names = [
+        child["name"]
+        for child in result["children"]
+    ]
+
+    assert "important.py" in names
+    assert "notes.txt" not in names
+    assert "src" in names
+
+    src = next(
+        child
+        for child in result["children"]
+        if child["name"] == "src"
+    )
+
+    nested_names = [
+        child["name"]
+        for child in src["children"]
+    ]
+
+    assert "important_helper.py" in nested_names
+    assert "other.py" not in nested_names
+
+
+
+# Test that JSON output correctly combines search, hidden files, and all file metadata options.
+def test_cli_json_all_options(capsys, monkeypatch, tmp_path):
+    matching_file = tmp_path / "important.py"
+    hidden_file = tmp_path / ".important.py"
+    other_file = tmp_path / "notes.txt"
+    folder = tmp_path / "src"
+
+    matching_file.write_bytes(b"a" * 2048)
+    hidden_file.touch()
+    other_file.touch()
+    folder.mkdir()
+
+    nested_match = folder / "important_helper.py"
+    nested_match.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rptree",
+            str(tmp_path),
+            "--json",
+            "--hidden",
+            "--search",
+            "important",
+            "--type",
+            "--size",
+            "--modified",
+        ],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    result = json.loads(captured.out)
+
+    children = {
+        child["name"]: child
+        for child in result["children"]
+    }
+
+    assert "important.py" in children
+    assert ".important.py" in children
+    assert "notes.txt" not in children
+    assert "src" in children
+
+    important = children["important.py"]
+
+    assert important["type"] == "file"
+    assert important["file_type"] == "Python"
+    assert important["size"] == "2.0 KB"
+    assert "modified" in important
+
+    src = children["src"]
+
+    nested_names = [
+        child["name"]
+        for child in src["children"]
+    ]
+
+    assert "important_helper.py" in nested_names

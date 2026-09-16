@@ -1,6 +1,7 @@
 import argparse
 import pathlib
 import sys
+import json
 
 from importlib.metadata import version
 from .tree import DirectoryTree
@@ -17,7 +18,8 @@ def main():
         args.show_type,
         args.show_size,
         args.search,
-        args.modified
+        args.modified,
+        args.json
     )
 
 def generate_tree(
@@ -30,6 +32,7 @@ def generate_tree(
     show_size,
     search,
     modified,
+    json_output,
 ):
     root_dir = pathlib.Path(root_dir)
 
@@ -50,9 +53,12 @@ def generate_tree(
         show_type=show_type,
         show_size=show_size,
         search=search,
-        modified=modified
+        modified=modified,
     )
-    tree.generate()
+    if json_output:
+        print(json.dumps(tree._generator._build_json_tree(root_dir), indent=4))
+    else:
+        tree.generate()
 
 
 
@@ -136,6 +142,12 @@ def parse_cmd_line_arguments():
         action="store_true",
         dest="modified",
         help="show file modification times",
+    )
+
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="output the tree as JSON",
     )
 
     return parser.parse_args()

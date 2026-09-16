@@ -1,6 +1,7 @@
 import os
 import pathlib
 from datetime import datetime
+import json
 
 
 PIPE = "│"
@@ -91,7 +92,7 @@ class DirectoryTree:
             show_type,
             show_size,
             search,
-            modified
+            modified,
         )
 
 
@@ -117,6 +118,7 @@ class _TreeGenerator:
         show_size: bool = False,
         search: str | None = None,
         modified: bool = False,
+
     ):
         self._root_dir = pathlib.Path(root_dir)
         self._depth = depth
@@ -140,7 +142,10 @@ class _TreeGenerator:
 
     def _tree_head(self) -> None:
         """Add the root directory to the tree."""
-        self._tree.append(f"{self._root_dir}{os.sep}")
+
+        root_name = self._root_dir.resolve().name
+
+        self._tree.append(f"{root_name}{os.sep}")
         self._tree.append(PIPE)
 
 
@@ -298,6 +303,7 @@ class _TreeGenerator:
             f"{prefix}{connector} {file_name}"
         )
 
+
     def _add_directory(
         self,
         directory: pathlib.Path,
@@ -393,3 +399,81 @@ class _TreeGenerator:
                 return True
 
         return False
+
+
+    def _build_json_tree(self, directory: pathlib.Path) -> dict:
+        """Build a dictionary representing a directory tree."""
+
+        tree = {
+            "name": directory.resolve().name,
+            "type": "directory",
+            "children": [],
+        }
+
+        entries = sorted(
+            directory.iterdir(),
+            key=lambda entry: (entry.is_file(), entry.name.lower()),
+        )
+
+        if self._files_only and not self._dirs_only:
+            for entry in entries:
+                if entry.is_dir():
+                    nested_tree = self._build_json_tree(entry)
+                    tree["children"].extend(nested_tree["children"])
+                elif entry in self._get_visible_entries(entries):
+                    tree["children"].append(
+                        self._build_json_file(entry)
+                    )
+
+            return tree
+
+        visible_entries = self._get_visible_entries(entries)
+
+        if self._search is not None:
+            visible_entries = [
+                entry
+                for entry in visible_entries
+                if (
+                    entry.is_file() and self._matches_search(entry)
+                )
+                or (
+                    entry.is_dir()
+                    and self._directory_contains_match(entry)
+                )
+            ]
+
+        for entry in visible_entries:
+            if entry.is_dir():
+                tree["children"].append(
+                    self._build_json_tree(entry)
+                )
+            else:
+                tree["children"].append(
+                    self._build_json_file(entry)
+                )
+
+        return tree
+
+
+    def _build_json_file(self, file: pathlib.Path) -> dict:
+        """Build a dictionary representing a file."""
+
+        result = {
+            "name": file.name,
+            "type": "file",
+        }
+
+        if self._show_type:
+            result["file_type"] = get_file_type(file)
+
+        if self._show_size:
+            result["size"] = get_file_size(file)
+
+        if self._modified:
+            result["modified"] = get_modified_time(file)
+
+        return result
+
+
+
+    
