@@ -3,7 +3,7 @@ import pathlib
 import sys
 
 from . import __version__
-from .rptree import DirectoryTree
+from .tree import DirectoryTree
 
 def main():
     args = parse_cmd_line_arguments()

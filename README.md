@@ -11,36 +11,67 @@ For example:
 ```text
 /Users/myusername/Projects/Repository-Tree-Graph/
 │
-├── rptree_dir/
-│   ├── __init__.py
-│   ├── rptree.py
-│   └── cli.py
+├── src/
+│   └── rptree/
+│       ├── __init__.py
+│       ├── cli.py
+│       └── tree.py
 │
-├── tree.py
+├── tests/
 ├── README.md
+├── LICENSE
+├── pyproject.toml
 └── .gitignore
 ```
 
-## How To Use
+## Installation
 
-Open a terminal and navigate to the project directory.
+Clone the repository and navigate into the project directory:
+
+```bash
+git clone https://github.com/BenjaminBristow/Repository-Tree-Graph.git
+cd Repository-Tree-Graph
+```
+
+Create and activate a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Install `rptree`:
+
+```bash
+pip install .
+```
+
+The `rptree` command is then available in the virtual environment.
+
+## How To Use
 
 Run:
 
 ```bash
-python3 tree.py <directory>
+rptree <directory>
 ```
 
 For example:
 
 ```bash
-python3 tree.py //Users/myusername/Repository-Tree-Graph
+rptree /Users/myusername/Repository-Tree-Graph
+```
+
+If no directory is provided, `rptree` uses the current directory:
+
+```bash
+rptree
 ```
 
 On Windows, you can provide a Windows directory path:
 
 ```bash
-python tree.py C:\Users\YourName\Repository-Tree-Graph
+rptree C:\Users\YourName\Repository-Tree-Graph
 ```
 
 ## Version
@@ -48,13 +79,13 @@ python tree.py C:\Users\YourName\Repository-Tree-Graph
 To display the current version:
 
 ```bash
-python3 tree.py -v
+rptree -v
 ```
 
 or:
 
 ```bash
-python3 tree.py --version
+rptree --version
 ```
 
 ## Help
@@ -62,37 +93,12 @@ python3 tree.py --version
 To display the available commands:
 
 ```bash
-python3 tree.py -h
+rptree -h
 ```
 
 or:
 
 ```bash
-python3 tree.py --help
+rptree --help
+``
 ```
-
-## Current Features
-
-* Generate a tree diagram of a directory
-* Display files and subdirectories recursively
-* Sort directory contents
-* Command-line interface
-* Version information
-* Help information
-
-## Project Structure
-
-```text
-Repository-Tree_Graph/
-├── tree.py
-├── rptree_dir/
-│   ├── __init__.py
-│   ├── cli.py
-│   └── rptree.py
-├── README.md
-└── .gitignore
-```
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
