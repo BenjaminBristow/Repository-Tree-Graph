@@ -1,6 +1,7 @@
 from rptree.cli import main
-from rptree.tree import DirectoryTree, get_file_type, get_file_size
+from rptree.tree import DirectoryTree, get_file_type, get_file_size, get_modified_time
 from importlib.metadata import version
+from datetime import datetime
 
 
 # Tests that an empty directory produces only the root directory and tree line.
@@ -1195,3 +1196,212 @@ def test_search_with_hidden_option(tmp_path, capsys):
     captured = capsys.readouterr()
 
     assert ".database.py" in captured.out
+
+
+
+# Tests that a file's modification time is returned in the expected format.
+def test_get_modified_time(tmp_path):
+    file = tmp_path / "example.txt"
+    file.touch()
+
+    modified_time = get_modified_time(file)
+
+    assert len(modified_time) == 16
+    assert modified_time[2] == "/"
+    assert modified_time[5] == "/"
+    assert modified_time[10] == " "
+    assert modified_time[13] == ":"
+
+
+
+# Tests that the modification time uses the file's actual modification timestamp.
+def test_get_modified_time_matches_file_timestamp(tmp_path):
+    file = tmp_path / "example.txt"
+    file.touch()
+
+    expected_time = datetime.fromtimestamp(
+        file.stat().st_mtime
+    ).strftime("%d/%m/%Y %H:%M")
+
+    assert get_modified_time(file) == expected_time
+
+
+
+# Tests that the modified option displays a file's modification time.
+def test_modified_option_shows_modified_time(tmp_path, capsys):
+    file = tmp_path / "example.py"
+    file.touch()
+
+    tree = DirectoryTree(
+        tmp_path,
+        modified=True,
+    )
+    tree.generate()
+
+    expected_time = get_modified_time(file)
+
+    captured = capsys.readouterr()
+
+    assert f"example.py [Modified: {expected_time}]" in captured.out
+
+
+
+# Tests that the modified option does not add information to directories.
+def test_modified_option_does_not_label_directories(tmp_path, capsys):
+    directory = tmp_path / "example"
+    directory.mkdir()
+
+    tree = DirectoryTree(
+        tmp_path,
+        modified=True,
+    )
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert "example/ [Modified:" not in captured.out
+
+
+
+# Tests that modification times are not shown unless the modified option is enabled.
+def test_modified_option_disabled_by_default(tmp_path, capsys):
+    file = tmp_path / "example.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path)
+    tree.generate()
+
+    captured = capsys.readouterr()
+
+    assert "[Modified:" not in captured.out
+
+
+
+# Tests that the modified option works through the command-line interface.
+def test_cli_modified(tmp_path, capsys, monkeypatch):
+    file = tmp_path / "example.py"
+    file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", "--modified", str(tmp_path)],
+    )
+
+    main()
+
+    expected_time = get_modified_time(file)
+
+    captured = capsys.readouterr()
+
+    assert f"example.py [Modified: {expected_time}]" in captured.out
+
+
+
+# Tests that the modified option works together with the type option.
+def test_cli_modified_and_type(tmp_path, capsys, monkeypatch):
+    file = tmp_path / "example.py"
+    file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", "--modified", "--type", str(tmp_path)],
+    )
+
+    main()
+
+    expected_time = get_modified_time(file)
+
+    captured = capsys.readouterr()
+
+    assert (
+        f"example.py [Python]  [Modified: {expected_time}]"
+        in captured.out
+    )
+
+
+
+# Tests that the modified option works together with the size option.
+def test_cli_modified_and_size(tmp_path, capsys, monkeypatch):
+    file = tmp_path / "example.py"
+    file.write_bytes(b"a" * 2048)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", "--modified", "--size", str(tmp_path)],
+    )
+
+    main()
+
+    expected_time = get_modified_time(file)
+
+    captured = capsys.readouterr()
+
+    assert (
+        f"example.py [2.0 KB]  [Modified: {expected_time}]"
+        in captured.out
+    )
+
+
+
+# Tests that the modified option works together with search.
+def test_cli_modified_and_search(tmp_path, capsys, monkeypatch):
+    matching_file = tmp_path / "database.py"
+    matching_file.touch()
+
+    unrelated_file = tmp_path / "main.py"
+    unrelated_file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", "--modified", "--search", "database", str(tmp_path)],
+    )
+
+    main()
+
+    expected_time = get_modified_time(matching_file)
+
+    captured = capsys.readouterr()
+
+    assert f"database.py [Modified: {expected_time}]" in captured.out
+    assert "main.py" not in captured.out
+
+
+
+# Tests that all file information options work together.
+def test_cli_type_size_modified_search(
+    tmp_path,
+    capsys,
+    monkeypatch,
+):
+    matching_file = tmp_path / "database.py"
+    matching_file.write_bytes(b"a" * 2048)
+
+    unrelated_file = tmp_path / "main.py"
+    unrelated_file.write_bytes(b"b" * 1024)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rptree",
+            "--type",
+            "--size",
+            "--modified",
+            "--search",
+            "database",
+            str(tmp_path),
+        ],
+    )
+
+    main()
+
+    expected_time = get_modified_time(matching_file)
+
+    captured = capsys.readouterr()
+
+    assert (
+        f"database.py [Python]  [2.0 KB]  "
+        f"[Modified: {expected_time}]"
+        in captured.out
+    )
+
+    assert "main.py" not in captured.out

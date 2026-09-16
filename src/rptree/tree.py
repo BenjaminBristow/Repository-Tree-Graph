@@ -1,5 +1,6 @@
 import os
 import pathlib
+from datetime import datetime
 
 
 PIPE = "│"
@@ -33,6 +34,7 @@ FILE_TYPES = {
     ".sh": "Shell",
 }
 
+
 def get_file_type(file: pathlib.Path) -> str:
     """Return the type of a file based on its extension."""
 
@@ -56,6 +58,15 @@ def get_file_size(file: pathlib.Path) -> str:
     return f"{size / 1024**3:.1f} GB"
 
 
+def get_modified_time(file: pathlib.Path) -> str:
+    """Return the last modified time of a file."""
+
+    modified_time = file.stat().st_mtime
+    modified_datetime = datetime.fromtimestamp(modified_time)
+
+    return modified_datetime.strftime("%d/%m/%Y %H:%M")
+
+
 class DirectoryTree:
     """Generate and print a tree representation of a directory."""
 
@@ -69,6 +80,7 @@ class DirectoryTree:
         show_type: bool = False,
         show_size: bool = False,
         search: str | None = None,
+        modified: bool = False,
     ):
         self._generator = _TreeGenerator(
             root_dir,
@@ -78,7 +90,8 @@ class DirectoryTree:
             hidden,
             show_type,
             show_size,
-            search
+            search,
+            modified
         )
 
 
@@ -103,6 +116,7 @@ class _TreeGenerator:
         show_type: bool = False,
         show_size: bool = False,
         search: str | None = None,
+        modified: bool = False,
     ):
         self._root_dir = pathlib.Path(root_dir)
         self._depth = depth
@@ -112,6 +126,7 @@ class _TreeGenerator:
         self._show_type = show_type
         self._show_size = show_size
         self._search = search
+        self._modified=modified
         self._tree: list[str] = []
 
 
@@ -274,6 +289,10 @@ class _TreeGenerator:
         if self._show_size:
             file_size = get_file_size(file)
             file_name += f" [{file_size}] "
+
+        if self._modified:
+            modified_time = get_modified_time(file)
+            file_name += f" [Modified: {modified_time}] "
 
         self._tree.append(
             f"{prefix}{connector} {file_name}"
