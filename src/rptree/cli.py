@@ -7,9 +7,22 @@ from .tree import DirectoryTree
 
 def main():
     args = parse_cmd_line_arguments()
-    generate_tree(args.root_dir)
 
-def generate_tree(root_dir):
+    generate_tree(
+        args.root_dir,
+        args.depth,
+        args.files,
+        args.dirs,
+        args.hidden,
+    )
+
+def generate_tree(
+    root_dir,
+    depth,
+    files,
+    dirs,
+    hidden,
+):
     root_dir = pathlib.Path(root_dir)
 
 
@@ -20,7 +33,13 @@ def generate_tree(root_dir):
         )
         sys.exit(1)
 
-    tree = DirectoryTree(root_dir)
+    tree = DirectoryTree(
+        root_dir,
+        depth,
+        files_only=files,
+        dirs_only=dirs,
+        hidden=hidden
+    )
     tree.generate()
 
 
@@ -47,6 +66,34 @@ def parse_cmd_line_arguments():
         nargs="?",
         default=".",
         help="directory to generate a tree for (default: current directory)",
+    )
+
+    parser.add_argument(
+        "-dp",
+        "--depth",
+        type=int,
+        help="limit the depth of the generated tree",
+    )
+
+    parser.add_argument(
+        "-f",
+        "--files",
+        action="store_true",
+        help="show files only",
+    )
+
+    parser.add_argument(
+        "-d",
+        "--dirs",
+        action="store_true",
+        help="show directories only",
+    )
+
+    parser.add_argument(
+        "-hd",
+        "--hidden",
+        action="store_true",
+        help="show hidden files and directories",
     )
 
     return parser.parse_args()
