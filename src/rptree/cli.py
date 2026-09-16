@@ -4,7 +4,7 @@ import sys
 import json
 
 from importlib.metadata import version
-from .tree import DirectoryTree
+from .tree import DirectoryTree, format_size
 
 def main():
     args = parse_cmd_line_arguments()
@@ -20,7 +20,8 @@ def main():
         args.search,
         args.modified,
         args.json,
-        args.output
+        args.output,
+        args.stats
     )
 
 def generate_tree(
@@ -35,6 +36,7 @@ def generate_tree(
     modified,
     json_output,
     output,
+    stats,
 ):
     root_dir = pathlib.Path(root_dir)
 
@@ -57,6 +59,37 @@ def generate_tree(
         search=search,
         modified=modified,
     )
+
+    if stats:
+        statistics = tree._generator._build_statistics(root_dir)
+
+        print(f"Files.     :  {statistics['files']}")
+        print(f"Directories:  {statistics['directories']}")
+        print(f"Total size :  {format_size(statistics['total_size'])}")
+        print(" ")
+        print("File types:")
+
+        if statistics["file_types"]:
+            longest_type = max(
+                len(file_type) for file_type in statistics["file_types"]
+            )
+
+            sorted_file_types = sorted(
+                statistics["file_types"].items(),
+                key=lambda item: (
+                    item[0] == "Unknown",
+                    -item[1],
+                    item[0],
+                ),
+            )
+
+            for file_type, count in sorted_file_types:
+                print(
+                    f"  {file_type:<{longest_type}} : {count}"
+                )
+        return 
+
+    
     if json_output:
         json_data = json.dumps(
             tree._generator._build_json_tree(root_dir),
@@ -165,6 +198,12 @@ def parse_cmd_line_arguments():
     parser.add_argument(
         "--output",
         help="write the output to a file",
+    )
+
+    parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="show file and directory statistics",
     )
 
 

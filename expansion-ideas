@@ -44,27 +44,6 @@ This gives the project an obvious real-world use case.
 
 ---
 
-### A longer-term idea: repository statistics
-
-You could eventually have:
-
-rptree --stats
-
-which might show:
-Repository Statistics
-
-Files:             42
-Directories:       11
-Python files:      27
-Java files:        4
-Markdown files:    5
-Total size:        1.8 MB
-
-Largest files:
-  tree.py          12.4 KB
-  cli.py            8.2 KB
-  test_tree.py      7.9 KB
-
 And perhaps:
 rptree --stats --language
 Language Statistics
@@ -73,3 +52,8 @@ Python       27 files
 Java          4 files
 Markdown      5 files
 JSON          3 files
+
+
+=======ISSUES======
+some files are restricted
+add ALL file types 
