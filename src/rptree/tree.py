@@ -39,6 +39,23 @@ def get_file_type(file: pathlib.Path) -> str:
     return FILE_TYPES.get(file.suffix.lower(), "Unknown")
 
 
+def get_file_size(file: pathlib.Path) -> str:
+    """Return the size of a file in a human-readable format."""
+
+    size = file.stat().st_size
+
+    if size < 1024:
+        return f"{size} B"
+
+    if size < 1024**2:
+        return f"{size / 1024:.1f} KB"
+
+    if size < 1024**3:
+        return f"{size / 1024**2:.1f} MB"
+
+    return f"{size / 1024**3:.1f} GB"
+
+
 class DirectoryTree:
     """Generate and print a tree representation of a directory."""
 
@@ -50,6 +67,7 @@ class DirectoryTree:
         dirs_only: bool = False,
         hidden: bool = False,
         show_type: bool = False,
+        show_size: bool = False,
     ):
         self._generator = _TreeGenerator(
             root_dir,
@@ -57,7 +75,8 @@ class DirectoryTree:
             files_only,
             dirs_only,
             hidden,
-            show_type
+            show_type,
+            show_size
         )
 
 
@@ -80,6 +99,7 @@ class _TreeGenerator:
         dirs_only: bool = False,
         hidden: bool = False,
         show_type: bool = False,
+        show_size: bool = False,
     ):
         self._root_dir = pathlib.Path(root_dir)
         self._depth = depth
@@ -87,6 +107,7 @@ class _TreeGenerator:
         self._dirs_only = dirs_only
         self._hidden = hidden
         self.show_type = show_type
+        self.show_size = show_size
         self._tree: list[str] = []
 
 
@@ -231,12 +252,15 @@ class _TreeGenerator:
 
         if self.show_type:
             file_type = get_file_type(file)
-            file_name += f" [{file_type}]"
+            file_name += f" [{file_type}] "
+
+        if self.show_size:
+            file_size = get_file_size(file)
+            file_name += f" [{file_size}] "
 
         self._tree.append(
             f"{prefix}{connector} {file_name}"
         )
-
 
     def _add_directory(
         self,
