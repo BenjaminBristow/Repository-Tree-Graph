@@ -49,7 +49,10 @@ class _TreeGenerator:
     ) -> None:
         """Recursively add the contents of a directory to the tree."""
         entries = directory.iterdir()
-        entries = sorted(entries, key=lambda entry: entry.is_file())
+        entries = sorted( 
+            entries, 
+            key=lambda entry: (entry.is_file(), entry.name.lower())
+        ) 
         entries_count = len(entries)
 
         for index, entry in enumerate(entries):
