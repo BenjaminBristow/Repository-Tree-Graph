@@ -100,5 +100,4 @@ or:
 
 ```bash
 rptree --help
-``
 ```
