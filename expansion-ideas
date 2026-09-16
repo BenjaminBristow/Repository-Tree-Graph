@@ -1,0 +1,142 @@
+##  File information
+
+Let users see useful information alongside the tree:
+
+Example: rptree --size
+Repository-Tree-Graph/
+├── src/
+│   └── rptree/
+│       ├── cli.py          4.2 KB
+│       ├── tree.py         7.8 KB
+│       └── __init__.py     0.4 KB
+├── tests/
+│   └── test_tree.py        6.1 KB
+└── pyproject.toml           0.6 KB
+
+rptree --size
+rptree --type
+rptree --modified
+
+
+## Searching
+
+This would make it considerably more useful.
+
+rptree --search "TODO"
+or:
+
+rptree --search ".py"
+You could output something like:
+Search results for: TODO
+
+src/rptree/tree.py:42
+src/rptree/cli.py:18
+tests/test_tree.py:91
+
+## JSON output
+This is one I want to add because it makes my program useful to other programs.
+
+rptree --json
+
+Instead of:
+
+src/
+├── rptree/
+│   ├── cli.py
+│   └── tree.py
+
+you could produce:
+
+{
+  "name": "src",
+  "type": "directory",
+  "children": [
+    {
+      "name": "rptree",
+      "type": "directory",
+      "children": [
+        {
+          "name": "cli.py",
+          "type": "file"
+        }
+      ]
+    }
+  ]
+}
+Now another Python program could actually consume rptree's output.
+Could start creating APIs
+
+## Git awareness
+This could make the project particularly interesting for a CS portfolio.
+
+For example:
+rptree --git
+could show:
+Repository-Tree-Graph/
+├── src/
+│   └── rptree/
+│       ├── cli.py
+│       └── tree.py
+├── tests/
+└── README.md
+
+Git:
+  Branch: main
+  Modified: 2 files
+  Untracked: 1 file
+  Commits: 37
+
+I could eventually mark files:
+├── cli.py       [modified]
+├── tree.py
+├── README.md    [untracked]
+└── tests/
+
+That starts making rptree a repository inspection tool, rather than simply a tree generator.
+
+## Markdown output
+For GitHub projects, this could be really nice:
+rptree --markdown
+producing something suitable for a README:
+
+```text
+src/
+├── rptree/
+│   ├── cli.py
+│   └── tree.py
+└── tests/
+'''
+
+This gives the project an obvious real-world use case.
+
+---
+
+### A longer-term idea: repository statistics
+
+You could eventually have:
+
+rptree --stats
+
+which might show:
+Repository Statistics
+
+Files:             42
+Directories:       11
+Python files:      27
+Java files:        4
+Markdown files:    5
+Total size:        1.8 MB
+
+Largest files:
+  tree.py          12.4 KB
+  cli.py            8.2 KB
+  test_tree.py      7.9 KB
+
+And perhaps:
+rptree --stats --language
+Language Statistics
+
+Python       27 files
+Java          4 files
+Markdown      5 files
+JSON          3 files
