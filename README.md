@@ -47,7 +47,75 @@ Repository-Tree-Graph/
 └── pyproject.toml
 ```
 
-## Installation
+## Global Installation
+
+`rptree` can be installed as a standalone command-line tool using `pipx`. This allows it to be used from any directory without activating a virtual environment.
+
+### Install pipx
+
+If `pipx` is not already installed, install it using Homebrew:
+
+```bash
+brew install pipx
+```
+
+Check that it is installed:
+
+```bash
+pipx --version
+```
+
+### Install rptree
+
+Clone the repository and move into the project directory:
+
+```bash
+git clone https://github.com/BenjaminBristow/Repository-Tree-Graph.git
+cd Repository-Tree-Graph
+```
+
+Install `rptree` using `pipx`:
+
+```bash
+pipx install .
+```
+
+If `pipx` reports that its application directory is not on your `PATH`, run:
+
+```bash
+pipx ensurepath
+```
+
+Then restart your terminal.
+
+### Use rptree from anywhere
+
+Once installed, `rptree` can be run from any directory:
+
+```bash
+cd ~/Desktop
+rptree
+```
+
+Because `rptree` uses the current directory by default, this will generate a tree of the Desktop.
+
+You can also specify a directory directly:
+
+```bash
+rptree ~/Documents
+```
+
+Check the installation with:
+
+```bash
+rptree --version
+```
+
+This installation method keeps `rptree` isolated from the system Python environment while making the command available globally.
+
+
+## Development Installation 
+This installation method is intended for development, testing, and making changes to the rptree source code using a virtual environment.
 
 ### Clone the repository
 
