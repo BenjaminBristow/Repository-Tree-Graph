@@ -16,26 +16,159 @@ ELLIPSIS = "..."
 # Maps file extensions to human-readable file types.
 # This is used by the --type option and file statistics.
 FILE_TYPES = {
+    # Python
     ".py": "Python",
+    ".pyw": "Python",
+    ".pyx": "Cython",
+
+    # Java
     ".java": "Java",
+    ".class": "Java Bytecode",
+    ".jar": "Java Archive",
+
+    # C / C++
     ".c": "C",
-    ".cpp": "C++",
     ".h": "C/C++ Header",
+    ".cpp": "C++",
+    ".cc": "C++",
+    ".cxx": "C++",
     ".hpp": "C++ Header",
+    ".hh": "C++ Header",
+    ".hxx": "C++ Header",
+
+    # C#
+    ".cs": "C#",
+
+    # Go
+    ".go": "Go",
+
+    # Rust
+    ".rs": "Rust",
+
+    # Ruby
+    ".rb": "Ruby",
+
+    # PHP
+    ".php": "PHP",
+
+    # Swift
+    ".swift": "Swift",
+
+    # Kotlin
+    ".kt": "Kotlin",
+    ".kts": "Kotlin Script",
+
+    # JavaScript / TypeScript
     ".js": "JavaScript",
+    ".jsx": "JavaScript JSX",
+    ".mjs": "JavaScript Module",
+    ".cjs": "JavaScript CommonJS",
     ".ts": "TypeScript",
+    ".tsx": "TypeScript JSX",
+    ".mts": "TypeScript Module",
+    ".cts": "TypeScript CommonJS",
+
+    # Web
     ".html": "HTML",
+    ".htm": "HTML",
     ".css": "CSS",
+    ".scss": "SCSS",
+    ".sass": "Sass",
+    ".less": "Less",
+    ".vue": "Vue",
+    ".svelte": "Svelte",
+
+    # Data / Configuration
     ".json": "JSON",
+    ".jsonc": "JSON with Comments",
     ".xml": "XML",
-    ".md": "Markdown",
-    ".txt": "Text",
-    ".toml": "TOML",
     ".yaml": "YAML",
     ".yml": "YAML",
+    ".toml": "TOML",
+    ".ini": "INI",
+    ".cfg": "Configuration",
+    ".conf": "Configuration",
+    ".env": "Environment",
+    ".properties": "Properties",
+
+    # Documentation / Text
+    ".md": "Markdown",
+    ".mdx": "MDX",
+    ".txt": "Text",
+    ".rst": "reStructuredText",
+    ".rtf": "Rich Text",
+
+    # Data
     ".csv": "CSV",
+    ".tsv": "TSV",
     ".sql": "SQL",
+    ".db": "Database",
+    ".sqlite": "SQLite Database",
+    ".sqlite3": "SQLite Database",
+
+    # Shell / Scripts
     ".sh": "Shell",
+    ".bash": "Bash",
+    ".zsh": "Zsh",
+    ".fish": "Fish",
+    ".bat": "Batch",
+    ".cmd": "Windows Command",
+    ".ps1": "PowerShell",
+
+    # Images
+    ".png": "PNG Image",
+    ".jpg": "JPEG Image",
+    ".jpeg": "JPEG Image",
+    ".gif": "GIF Image",
+    ".bmp": "Bitmap Image",
+    ".webp": "WebP Image",
+    ".svg": "SVG Image",
+    ".ico": "Icon",
+    ".tif": "TIFF Image",
+    ".tiff": "TIFF Image",
+    ".avif": "AVIF Image",
+
+    # Audio
+    ".mp3": "MP3 Audio",
+    ".wav": "WAV Audio",
+    ".flac": "FLAC Audio",
+    ".ogg": "OGG Audio",
+    ".aac": "AAC Audio",
+    ".m4a": "M4A Audio",
+    ".wma": "WMA Audio",
+
+    # Video
+    ".mp4": "MP4 Video",
+    ".mov": "QuickTime Video",
+    ".avi": "AVI Video",
+    ".mkv": "Matroska Video",
+    ".webm": "WebM Video",
+    ".wmv": "Windows Media Video",
+    ".flv": "Flash Video",
+
+    # Archives
+    ".zip": "ZIP Archive",
+    ".tar": "TAR Archive",
+    ".gz": "GZIP Archive",
+    ".bz2": "BZIP2 Archive",
+    ".xz": "XZ Archive",
+    ".7z": "7-Zip Archive",
+    ".rar": "RAR Archive",
+
+    # Documents
+    ".pdf": "PDF Document",
+    ".doc": "Word Document",
+    ".docx": "Word Document",
+    ".xls": "Excel Spreadsheet",
+    ".xlsx": "Excel Spreadsheet",
+    ".ppt": "PowerPoint Presentation",
+    ".pptx": "PowerPoint Presentation",
+
+    # Fonts
+    ".ttf": "TrueType Font",
+    ".otf": "OpenType Font",
+    ".woff": "Web Font",
+    ".woff2": "Web Font",
 }
 
 
