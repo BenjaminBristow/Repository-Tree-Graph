@@ -19,7 +19,8 @@ def main():
         args.show_size,
         args.search,
         args.modified,
-        args.json
+        args.json,
+        args.output
     )
 
 def generate_tree(
@@ -33,6 +34,7 @@ def generate_tree(
     search,
     modified,
     json_output,
+    output,
 ):
     root_dir = pathlib.Path(root_dir)
 
@@ -56,7 +58,17 @@ def generate_tree(
         modified=modified,
     )
     if json_output:
-        print(json.dumps(tree._generator._build_json_tree(root_dir), indent=4))
+        json_data = json.dumps(
+            tree._generator._build_json_tree(root_dir),
+            indent=4,
+        )
+
+        if output:
+            with open(output, "w") as file:
+                file.write(json_data)
+        else:
+            print(json_data)
+
     else:
         tree.generate()
 
@@ -149,6 +161,12 @@ def parse_cmd_line_arguments():
         action="store_true",
         help="output the tree as JSON",
     )
+
+    parser.add_argument(
+        "--output",
+        help="write the output to a file",
+    )
+
 
     return parser.parse_args()
 

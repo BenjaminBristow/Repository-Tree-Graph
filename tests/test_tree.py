@@ -2053,3 +2053,140 @@ def test_cli_json_all_options(capsys, monkeypatch, tmp_path):
     ]
 
     assert "important_helper.py" in nested_names
+
+
+
+# Test that the CLI writes JSON output to a file when --json and --output are used together.
+def test_cli_json_output_file(capsys, monkeypatch, tmp_path):
+    test_file = tmp_path / "test.txt"
+    output_file = tmp_path / "tree.json"
+
+    test_file.touch()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rptree",
+            str(tmp_path),
+            "--json",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert output_file.exists()
+
+    with open(output_file) as file:
+        result = json.load(file)
+
+    assert result["name"] == tmp_path.name
+    assert result["type"] == "directory"
+
+    names = [
+        child["name"]
+        for child in result["children"]
+    ]
+
+    assert "test.txt" in names
+
+
+
+# Test that --output overwrites an existing output file with the new JSON tree.
+def test_cli_json_output_overwrites_existing_file(capsys, monkeypatch, tmp_path):
+    test_file = tmp_path / "test.txt"
+    output_file = tmp_path / "tree.json"
+
+    test_file.touch()
+    output_file.write_text("old content")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rptree",
+            str(tmp_path),
+            "--json",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+
+    with open(output_file) as file:
+        result = json.load(file)
+
+    assert result["name"] == tmp_path.name
+    assert result["type"] == "directory"
+
+    names = [
+        child["name"]
+        for child in result["children"]
+    ]
+
+    assert "test.txt" in names
+
+
+
+# Test that --output works correctly when combined with all JSON metadata and filtering options.
+def test_cli_json_output_all_options(capsys, monkeypatch, tmp_path):
+    test_file = tmp_path / "example.py"
+    hidden_file = tmp_path / ".hidden.py"
+    output_file = tmp_path / "tree.json"
+
+    test_file.write_text("print('hello')")
+    hidden_file.write_text("print('hidden')")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rptree",
+            str(tmp_path),
+            "--json",
+            "--output",
+            str(output_file),
+            "--hidden",
+            "--type",
+            "--size",
+            "--modified",
+            "--search",
+            "py",
+        ],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert output_file.exists()
+
+    with open(output_file) as file:
+        result = json.load(file)
+
+    names = [
+        child["name"]
+        for child in result["children"]
+    ]
+
+    assert "example.py" in names
+    assert ".hidden.py" in names
+
+    example_file = next(
+        child
+        for child in result["children"]
+        if child["name"] == "example.py"
+    )
+
+    assert example_file["type"] == "file"
+    assert example_file["file_type"] == "Python"
+    assert "size" in example_file
+    assert "modified" in example_file
