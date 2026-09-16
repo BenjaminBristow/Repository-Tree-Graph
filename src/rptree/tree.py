@@ -10,6 +10,35 @@ SPACE_PREFIX = "    "
 ELLIPSIS = "..."
 
 
+FILE_TYPES = {
+    ".py": "Python",
+    ".java": "Java",
+    ".c": "C",
+    ".cpp": "C++",
+    ".h": "C/C++ Header",
+    ".hpp": "C++ Header",
+    ".js": "JavaScript",
+    ".ts": "TypeScript",
+    ".html": "HTML",
+    ".css": "CSS",
+    ".json": "JSON",
+    ".xml": "XML",
+    ".md": "Markdown",
+    ".txt": "Text",
+    ".toml": "TOML",
+    ".yaml": "YAML",
+    ".yml": "YAML",
+    ".csv": "CSV",
+    ".sql": "SQL",
+    ".sh": "Shell",
+}
+
+def get_file_type(file: pathlib.Path) -> str:
+    """Return the type of a file based on its extension."""
+
+    return FILE_TYPES.get(file.suffix.lower(), "Unknown")
+
+
 class DirectoryTree:
     """Generate and print a tree representation of a directory."""
 
@@ -20,6 +49,7 @@ class DirectoryTree:
         files_only: bool = False,
         dirs_only: bool = False,
         hidden: bool = False,
+        show_type: bool = False,
     ):
         self._generator = _TreeGenerator(
             root_dir,
@@ -27,6 +57,7 @@ class DirectoryTree:
             files_only,
             dirs_only,
             hidden,
+            show_type
         )
 
 
@@ -48,12 +79,14 @@ class _TreeGenerator:
         files_only: bool = False,
         dirs_only: bool = False,
         hidden: bool = False,
+        show_type: bool = False,
     ):
         self._root_dir = pathlib.Path(root_dir)
         self._depth = depth
         self._files_only = files_only
         self._dirs_only = dirs_only
         self._hidden = hidden
+        self.show_type = show_type
         self._tree: list[str] = []
 
 
@@ -192,10 +225,16 @@ class _TreeGenerator:
         """Add a file to the tree."""
 
         if self._dirs_only and not self._files_only:
-            return  
+            return
+
+        file_name = file.name
+
+        if self.show_type:
+            file_type = get_file_type(file)
+            file_name += f" [{file_type}]"
 
         self._tree.append(
-            f"{prefix}{connector} {file.name}"
+            f"{prefix}{connector} {file_name}"
         )
 
 
@@ -269,3 +308,4 @@ class _TreeGenerator:
             ]
 
         return entries
+

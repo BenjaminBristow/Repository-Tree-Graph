@@ -14,6 +14,7 @@ def main():
         args.files,
         args.dirs,
         args.hidden,
+        args.show_type,
     )
 
 def generate_tree(
@@ -22,6 +23,7 @@ def generate_tree(
     files,
     dirs,
     hidden,
+    show_type,
 ):
     root_dir = pathlib.Path(root_dir)
 
@@ -38,9 +40,11 @@ def generate_tree(
         depth,
         files_only=files,
         dirs_only=dirs,
-        hidden=hidden
+        hidden=hidden,
+        show_type=show_type
     )
     tree.generate()
+
 
 
 def parse_cmd_line_arguments():
@@ -94,6 +98,14 @@ def parse_cmd_line_arguments():
         "--hidden",
         action="store_true",
         help="show hidden files and directories",
+    )
+
+    parser.add_argument(
+        "-t",
+        "--type",
+        action="store_true",
+        dest="show_type",
+        help="show file types",
     )
 
     return parser.parse_args()

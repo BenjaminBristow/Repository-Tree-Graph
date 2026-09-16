@@ -1,5 +1,5 @@
 from rptree.cli import main
-from rptree.tree import DirectoryTree
+from rptree.tree import DirectoryTree, get_file_type
 from importlib.metadata import version
 
 
@@ -495,3 +495,152 @@ def test_hidden_directories_can_be_shown(tmp_path):
 
     assert any(".hidden/" in line for line in result)
     assert any("secret.txt" in line for line in result)
+
+
+
+def test_get_file_type_python(tmp_path):
+    file = tmp_path / "example.py"
+    file.touch()
+
+    assert get_file_type(file) == "Python"
+
+
+
+def test_get_file_type_markdown(tmp_path):
+    file = tmp_path / "README.md"
+    file.touch()
+
+    assert get_file_type(file) == "Markdown"
+
+
+
+def test_get_file_type_unknown(tmp_path):
+    file = tmp_path / "example.xyz"
+    file.touch()
+
+    assert get_file_type(file) == "Unknown"
+
+
+
+def test_get_file_type_no_extension(tmp_path):
+    file = tmp_path / "README"
+    file.touch()
+
+    assert get_file_type(file) == "Unknown"
+
+
+
+def test_get_file_type_uppercase_extension(tmp_path):
+    file = tmp_path / "example.PY"
+    file.touch()
+
+    assert get_file_type(file) == "Python"
+
+
+
+def test_type_option_shows_file_type(tmp_path):
+    python_file = tmp_path / "example.py"
+    markdown_file = tmp_path / "README.md"
+
+    python_file.touch()
+    markdown_file.touch()
+
+    tree = DirectoryTree(
+        tmp_path,
+        show_type=True,
+    )
+
+    result = tree._generator.build_tree()
+
+    assert any("example.py [Python]" in line for line in result)
+    assert any("README.md [Markdown]" in line for line in result)
+
+
+
+def test_type_option_unknown_file(tmp_path):
+    file = tmp_path / "example.xyz"
+    file.touch()
+
+    tree = DirectoryTree(
+        tmp_path,
+        show_type=True,
+    )
+
+    result = tree._generator.build_tree()
+
+    assert any("example.xyz [Unknown]" in line for line in result)
+
+
+
+def test_type_option_does_not_label_directories(tmp_path):
+    folder = tmp_path / "folder"
+    folder.mkdir()
+
+    tree = DirectoryTree(
+        tmp_path,
+        show_type=True,
+    )
+
+    result = tree._generator.build_tree()
+
+    assert "└── folder/" in result
+    assert not any("[Unknown]" in line for line in result)
+
+
+
+def test_type_option_disabled_by_default(tmp_path):
+    file = tmp_path / "example.py"
+    file.touch()
+
+    tree = DirectoryTree(tmp_path)
+
+    result = tree._generator.build_tree()
+
+    assert any("example.py" in line for line in result)
+    assert not any("[Python]" in line for line in result)
+
+
+
+def test_cli_type(capsys, monkeypatch, tmp_path):
+    python_file = tmp_path / "example.py"
+    unknown_file = tmp_path / "example.xyz"
+    folder = tmp_path / "folder"
+
+    python_file.touch()
+    unknown_file.touch()
+    folder.mkdir()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", "--type", str(tmp_path)],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    assert "example.py [Python]" in captured.out
+    assert "example.xyz [Unknown]" in captured.out
+    assert "folder/" in captured.out
+    assert "folder/ [Unknown]" not in captured.out
+
+
+
+def test_cli_type_with_files(capsys, monkeypatch, tmp_path):
+    python_file = tmp_path / "example.py"
+    folder = tmp_path / "folder"
+
+    python_file.touch()
+    folder.mkdir()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["rptree", "--type", "--files", str(tmp_path)],
+    )
+
+    main()
+
+    captured = capsys.readouterr()
+
+    assert "example.py [Python]" in captured.out
+    assert "folder/" not in captured.out
