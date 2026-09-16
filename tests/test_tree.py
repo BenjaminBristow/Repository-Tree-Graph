@@ -1,5 +1,6 @@
 from rptree.cli import main
 from rptree.tree import DirectoryTree
+from importlib.metadata import version
 
 
 def test_empty_directory(tmp_path):
@@ -95,7 +96,7 @@ def test_cli_version(capsys, monkeypatch):
 
     captured = capsys.readouterr()
 
-    assert "rptree v1.0.1" in captured.out
+    assert f"rptree v{version('rptree')}" in captured.out
 
 
 

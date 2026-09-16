@@ -2,7 +2,7 @@ import argparse
 import pathlib
 import sys
 
-from . import __version__
+from importlib.metadata import version
 from .tree import DirectoryTree
 
 def main():
@@ -51,7 +51,7 @@ def parse_cmd_line_arguments():
     )
 
 
-    parser.version = f"rptree v{__version__}"
+    parser.version = f"rptree v{version('rptree')}"
 
     parser.add_argument(
         "-v",
