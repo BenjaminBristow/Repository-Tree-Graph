@@ -2,6 +2,7 @@ import argparse
 import pathlib
 import sys
 import json
+import os
 
 from importlib.metadata import version
 from .tree import DirectoryTree, format_size
@@ -65,11 +66,14 @@ def generate_tree(
 
     if stats:
         statistics = tree._generator._build_statistics(root_dir)
-
+        print()
+        print("=====================================================")
+        print(f"{root_dir.resolve().name}{os.sep}")
+        print()
         print(f"Files.     :  {statistics['files']}")
         print(f"Directories:  {statistics['directories']}")
         print(f"Total size :  {format_size(statistics['total_size'])}")
-        print(" ")
+        print()
         print("File types:")
 
         if statistics["file_types"]:
@@ -90,6 +94,9 @@ def generate_tree(
                 print(
                     f"  {file_type:<{longest_type}} : {count}"
                 )
+        print("=====================================================")
+        print()
+
         return 
 
     
