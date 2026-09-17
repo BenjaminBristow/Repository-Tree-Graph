@@ -2,6 +2,7 @@ from rptree.cli import main
 from importlib.metadata import version
 from datetime import datetime
 import json
+import pathlib
 from rptree.tree import (
     DirectoryTree,
     _TreeGenerator,
@@ -2150,29 +2151,25 @@ def test_cli_json_output_all_options(capsys, monkeypatch, tmp_path):
 
 
 
-# Test that statistics correctly count files, directories, total size, and file types.
+# Check that statistics correctly count files, directories, total size, and file types.
 def test_build_statistics(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
 
-    src = root / "src"
-    src.mkdir()
-
     python_file = root / "main.py"
+    text_file = root / "notes.txt"
+    java_file = root / "Main.java"
+
     python_file.write_text("print('hello')")
-
-    text_file = root / "README.txt"
     text_file.write_text("hello")
-
-    java_file = src / "Main.java"
-    java_file.write_text("class Main {}")
+    java_file.write_text("public class Main {}")
 
     generator = _TreeGenerator(root)
 
     statistics = generator._build_statistics(root)
 
     assert statistics["files"] == 3
-    assert statistics["directories"] == 1
+    assert statistics["directories"] == 0
 
     expected_size = (
         python_file.stat().st_size
@@ -2183,14 +2180,22 @@ def test_build_statistics(tmp_path):
     assert statistics["total_size"] == expected_size
 
     assert statistics["file_types"] == {
-        "Python": 1,
-        "Text": 1,
-        "Java": 1,
+        "Python": {
+            "count": 1,
+            "size": python_file.stat().st_size,
+        },
+        "Text": {
+            "count": 1,
+            "size": text_file.stat().st_size,
+        },
+        "Java": {
+            "count": 1,
+            "size": java_file.stat().st_size,
+        },
     }
 
 
-
-# Test that statistics correctly handle a directory containing no files or subdirectories.
+# Test that an empty directory produces zero files, directories, and total size.
 def test_build_statistics_empty_directory(tmp_path):
     generator = _TreeGenerator(tmp_path)
 
@@ -2204,37 +2209,104 @@ def test_build_statistics_empty_directory(tmp_path):
     }
 
 
-
-# Test that statistics include files and directories from deeply nested directories.
+# Check that statistics correctly include files and directories nested inside other directories.
 def test_build_statistics_nested_directories(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
 
-    level_one = root / "one"
-    level_one.mkdir()
+    src = root / "src"
+    src.mkdir()
 
-    level_two = level_one / "two"
-    level_two.mkdir()
+    python_file = src / "main.py"
+    text_file = src / "notes.txt"
 
-    level_three = level_two / "three"
-    level_three.mkdir()
-
-    file = level_three / "test.py"
-    file.write_text("print('hello')")
+    python_file.write_text("print('hello')")
+    text_file.write_text("hello")
 
     generator = _TreeGenerator(root)
 
     statistics = generator._build_statistics(root)
 
-    assert statistics["files"] == 1
-    assert statistics["directories"] == 3
-    assert statistics["total_size"] == file.stat().st_size
+    assert statistics["files"] == 2
+    assert statistics["directories"] == 1
+
+    expected_size = (
+        python_file.stat().st_size
+        + text_file.stat().st_size
+    )
+
+    assert statistics["total_size"] == expected_size
+
     assert statistics["file_types"] == {
-        "Python": 1,
+        "Python": {
+            "count": 1,
+            "size": python_file.stat().st_size,
+        },
+        "Text": {
+            "count": 1,
+            "size": text_file.stat().st_size,
+        },
     }
 
 
-# Test that statistics exclude hidden files by default and include them when hidden files are enabled.
+# Test that statistics only include files matching the search term.
+def test_build_statistics_search(tmp_path):
+    matching_file = tmp_path / "main.py"
+    unrelated_file = tmp_path / "notes.txt"
+
+    matching_file.write_text("print('hello')")
+    unrelated_file.write_text("hello")
+
+    generator = _TreeGenerator(
+        tmp_path,
+        search="main",
+    )
+
+    statistics = generator._build_statistics(tmp_path)
+
+    assert statistics["files"] == 1
+    assert statistics["directories"] == 0
+    assert statistics["total_size"] == matching_file.stat().st_size
+
+    assert statistics["file_types"] == {
+        "Python": {
+            "count": 1,
+            "size": matching_file.stat().st_size,
+        },
+    }
+
+
+# Test that statistics find matching files inside nested directories when searching.
+def test_build_statistics_nested_search(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+
+    matching_file = src / "main.py"
+    unrelated_file = src / "notes.txt"
+
+    matching_file.write_text("print('hello')")
+    unrelated_file.write_text("hello")
+
+    generator = _TreeGenerator(
+        tmp_path,
+        search="main",
+    )
+
+    statistics = generator._build_statistics(tmp_path)
+
+    assert statistics["files"] == 1
+    assert statistics["directories"] == 1
+    assert statistics["total_size"] == matching_file.stat().st_size
+
+    assert statistics["file_types"] == {
+        "Python": {
+            "count": 1,
+            "size": matching_file.stat().st_size,
+        },
+    }
+
+
+# Test that hidden files are excluded by default and included when hidden mode is enabled.
 def test_build_statistics_hidden_files(tmp_path):
     visible_file = tmp_path / "visible.py"
     hidden_file = tmp_path / ".hidden.py"
@@ -2248,15 +2320,17 @@ def test_build_statistics_hidden_files(tmp_path):
 
     assert statistics["files"] == 1
 
-    generator = _TreeGenerator(tmp_path, hidden=True)
+    generator = _TreeGenerator(
+        tmp_path,
+        hidden=True,
+    )
 
     statistics = generator._build_statistics(tmp_path)
 
     assert statistics["files"] == 2
 
 
-
-# Test that statistics correctly count nested files when files-only mode is enabled.
+# Test that files-only statistics include nested files but do not count directories.
 def test_build_statistics_files_only(tmp_path):
     directory = tmp_path / "folder"
     directory.mkdir()
@@ -2273,10 +2347,17 @@ def test_build_statistics_files_only(tmp_path):
 
     assert statistics["files"] == 1
     assert statistics["directories"] == 0
+    assert statistics["total_size"] == file.stat().st_size
+
+    assert statistics["file_types"] == {
+        "Python": {
+            "count": 1,
+            "size": file.stat().st_size,
+        },
+    }
 
 
-
-# Test that statistics count directories without counting files when directories-only mode is enabled.
+# Test that directories-only statistics count directories but exclude files.
 def test_build_statistics_dirs_only(tmp_path):
     directory = tmp_path / "folder"
     directory.mkdir()
@@ -2293,58 +2374,110 @@ def test_build_statistics_dirs_only(tmp_path):
 
     assert statistics["files"] == 0
     assert statistics["directories"] == 1
+    assert statistics["total_size"] == 0
+    assert statistics["file_types"] == {}
 
 
+# Test that files with unknown extensions are counted under the Unknown file type.
+def test_build_statistics_unknown_file_type(tmp_path):
+    unknown_file = tmp_path / "data.xyz"
+    unknown_file.write_text("some data")
 
-# Test that statistics only include files matching the search term and their required parent directories.
-def test_build_statistics_search(tmp_path):
-    matching_file = tmp_path / "match.py"
-    other_file = tmp_path / "other.txt"
-
-    matching_file.write_text("python")
-    other_file.write_text("text")
-
-    generator = _TreeGenerator(
-        tmp_path,
-        search="py",
-    )
+    generator = _TreeGenerator(tmp_path)
 
     statistics = generator._build_statistics(tmp_path)
 
     assert statistics["files"] == 1
-    assert statistics["directories"] == 0
-    assert statistics["total_size"] == matching_file.stat().st_size
+    assert statistics["total_size"] == unknown_file.stat().st_size
+
     assert statistics["file_types"] == {
-        "Python": 1,
+        "Unknown": {
+            "count": 1,
+            "size": unknown_file.stat().st_size,
+        },
     }
 
 
+# Test that multiple files of the same type have their counts and sizes combined.
+def test_build_statistics_multiple_same_file_type(tmp_path):
+    first_python_file = tmp_path / "main.py"
+    second_python_file = tmp_path / "utils.py"
 
-# Test that statistics find matching files inside nested directories.
-def test_build_statistics_nested_search(tmp_path):
+    first_python_file.write_text("print('hello')")
+    second_python_file.write_text("print('world')")
+
+    generator = _TreeGenerator(tmp_path)
+
+    statistics = generator._build_statistics(tmp_path)
+
+    expected_size = (
+        first_python_file.stat().st_size
+        + second_python_file.stat().st_size
+    )
+
+    assert statistics["files"] == 2
+    assert statistics["total_size"] == expected_size
+
+    assert statistics["file_types"] == {
+        "Python": {
+            "count": 2,
+            "size": expected_size,
+        },
+    }
+
+
+# Test that file types from nested directories are combined correctly.
+def test_build_statistics_nested_file_types(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+
+    python_file = src / "main.py"
+    java_file = tmp_path / "Main.java"
+
+    python_file.write_text("print('hello')")
+    java_file.write_text("public class Main {}")
+
+    generator = _TreeGenerator(tmp_path)
+
+    statistics = generator._build_statistics(tmp_path)
+
+    expected_size = (
+        python_file.stat().st_size
+        + java_file.stat().st_size
+    )
+
+    assert statistics["files"] == 2
+    assert statistics["directories"] == 1
+    assert statistics["total_size"] == expected_size
+
+    assert statistics["file_types"] == {
+        "Python": {
+            "count": 1,
+            "size": python_file.stat().st_size,
+        },
+        "Java": {
+            "count": 1,
+            "size": java_file.stat().st_size,
+        },
+    }
+
+
+# Test that statistics correctly calculate the total size of nested files.
+def test_build_statistics_nested_total_size(tmp_path):
     directory = tmp_path / "src"
     directory.mkdir()
 
-    matching_file = directory / "main.py"
-    other_file = directory / "notes.txt"
+    file_one = directory / "one.txt"
+    file_two = directory / "two.txt"
 
-    matching_file.write_text("python")
-    other_file.write_text("text")
+    file_one.write_bytes(b"a" * 1024)
+    file_two.write_bytes(b"b" * 2048)
 
-    generator = _TreeGenerator(
-        tmp_path,
-        search="main",
-    )
+    generator = _TreeGenerator(tmp_path)
 
     statistics = generator._build_statistics(tmp_path)
 
-    assert statistics["files"] == 1
-    assert statistics["directories"] == 1
-    assert statistics["total_size"] == matching_file.stat().st_size
-    assert statistics["file_types"] == {
-        "Python": 1,
-    }
-
+    assert statistics["total_size"] == 3072
 
 
 # Test that format_size returns bytes for values below 1 KB.
@@ -2692,67 +2825,131 @@ def test_cli_stats_combined_options(capsys, monkeypatch, tmp_path):
 
 
 
-# Test that statistics count files with unknown extensions as Unknown.
-def test_build_statistics_unknown_file_type(tmp_path):
-    unknown_file = tmp_path / "example.xyz"
-    unknown_file.touch()
+# Check that statistics correctly include files and directories nested inside other directories.
+def test_build_statistics_nested_directories(tmp_path):
+    """Test statistics for nested directories."""
 
-    generator = _TreeGenerator(tmp_path)
+    root = tmp_path / "project"
+    root.mkdir()
 
-    statistics = generator._build_statistics(tmp_path)
-
-    assert statistics["files"] == 1
-    assert statistics["file_types"] == {
-        "Unknown": 1,
-    }
-
-
-
-# Test that statistics correctly combine multiple files of the same type.
-def test_build_statistics_multiple_same_file_type(tmp_path):
-    file_one = tmp_path / "one.py"
-    file_two = tmp_path / "two.py"
-    file_three = tmp_path / "three.txt"
-
-    file_one.touch()
-    file_two.touch()
-    file_three.touch()
-
-    generator = _TreeGenerator(tmp_path)
-
-    statistics = generator._build_statistics(tmp_path)
-
-    assert statistics["files"] == 3
-    assert statistics["file_types"] == {
-        "Python": 2,
-        "Text": 1,
-    }
-
-
-
-# Test that statistics correctly count different file types in nested directories.
-def test_build_statistics_nested_file_types(tmp_path):
-    src = tmp_path / "src"
+    src = root / "src"
     src.mkdir()
 
     python_file = src / "main.py"
-    java_file = src / "Main.java"
-    text_file = src / "README.txt"
+    text_file = src / "notes.txt"
 
-    python_file.touch()
-    java_file.touch()
-    text_file.touch()
+    python_file.write_text("print('hello')")
+    text_file.write_text("hello")
 
-    generator = _TreeGenerator(tmp_path)
+    generator = _TreeGenerator(root)
 
-    statistics = generator._build_statistics(tmp_path)
+    statistics = generator._build_statistics(root)
 
-    assert statistics["files"] == 3
+    assert statistics["files"] == 2
     assert statistics["directories"] == 1
+
+    expected_size = (
+        python_file.stat().st_size
+        + text_file.stat().st_size
+    )
+
+    assert statistics["total_size"] == expected_size
+
     assert statistics["file_types"] == {
-        "Python": 1,
-        "Java": 1,
-        "Text": 1,
+        "Python": {
+            "count": 1,
+            "size": python_file.stat().st_size,
+        },
+        "Text": {
+            "count": 1,
+            "size": text_file.stat().st_size,
+        },
+    }
+
+
+
+# Check that statistics correctly include files and directories nested inside other directories.
+def test_build_statistics_nested_directories(tmp_path):
+    """Test statistics for nested directories."""
+
+    root = tmp_path / "project"
+    root.mkdir()
+
+    src = root / "src"
+    src.mkdir()
+
+    python_file = src / "main.py"
+    text_file = src / "notes.txt"
+
+    python_file.write_text("print('hello')")
+    text_file.write_text("hello")
+
+    generator = _TreeGenerator(root)
+
+    statistics = generator._build_statistics(root)
+
+    assert statistics["files"] == 2
+    assert statistics["directories"] == 1
+
+    expected_size = (
+        python_file.stat().st_size
+        + text_file.stat().st_size
+    )
+
+    assert statistics["total_size"] == expected_size
+
+    assert statistics["file_types"] == {
+        "Python": {
+            "count": 1,
+            "size": python_file.stat().st_size,
+        },
+        "Text": {
+            "count": 1,
+            "size": text_file.stat().st_size,
+        },
+    }
+
+
+
+# Check that statistics correctly include files and directories nested inside other directories.
+def test_build_statistics_nested_directories(tmp_path):
+    """Test statistics for nested directories."""
+
+    root = tmp_path / "project"
+    root.mkdir()
+
+    src = root / "src"
+    src.mkdir()
+
+    python_file = src / "main.py"
+    text_file = src / "notes.txt"
+
+    python_file.write_text("print('hello')")
+    text_file.write_text("hello")
+
+    generator = _TreeGenerator(root)
+
+    statistics = generator._build_statistics(root)
+
+    assert statistics["files"] == 2
+    assert statistics["directories"] == 1
+
+    expected_size = (
+        python_file.stat().st_size
+        + text_file.stat().st_size
+    )
+
+    assert statistics["total_size"] == expected_size
+
+    assert statistics["file_types"] == {
+        "Python": {
+            "count": 1,
+            "size": python_file.stat().st_size,
+        },
+        "Text": {
+            "count": 1,
+            "size": text_file.stat().st_size,
+        },
     }
 
 
@@ -2837,3 +3034,671 @@ def test_cli_stats_unknown_file_type_last(
     unknown_position = captured.out.index("Unknown")
 
     assert python_position < unknown_position
+
+
+
+# Test that depth=0 only displays the root directory.
+def test_depth_zero(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / "file.txt").write_text("hello")
+    (root / "folder").mkdir()
+    (root / "folder" / "nested.txt").write_text("hello")
+
+    tree = DirectoryTree(root, depth=0)
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "project/" in output
+    assert "file.txt" not in output
+    assert "folder" not in output
+
+
+
+# Test that depth=1 displays the root directory and its immediate contents.
+def test_depth_one(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / "file.txt").write_text("hello")
+    (root / "folder").mkdir()
+    (root / "folder" / "nested.txt").write_text("hello")
+
+    tree = DirectoryTree(root, depth=1)
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "project/" in output
+    assert "file.txt" in output
+    assert "folder/" in output
+    assert "nested.txt" not in output
+
+
+
+# Test that a depth larger than the directory tree does not cause an error.
+def test_depth_larger_than_tree(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / "folder").mkdir()
+    (root / "folder" / "file.txt").write_text("hello")
+
+    tree = DirectoryTree(root, depth=100)
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "project/" in output
+    assert "folder/" in output
+    assert "file.txt" in output
+
+
+
+# Test that a directory matching the search term is displayed.
+def test_search_matching_directory(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    matching_directory = root / "important_files"
+    matching_directory.mkdir()
+
+    (matching_directory / "test.txt").write_text("hello")
+
+    tree = DirectoryTree(root, search="important")
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "important_files/" in output
+
+
+
+# Test that searching is case-insensitive.
+def test_search_case_insensitive(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / "MyFile.PY").write_text("print('hello')")
+
+    tree = DirectoryTree(root, search="myfile")
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "MyFile.PY" in output
+
+
+
+# Test that a search with no matches produces no matching files.
+def test_search_no_matches(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / "hello.txt").write_text("hello")
+    (root / "world.txt").write_text("world")
+
+    tree = DirectoryTree(root, search="does-not-exist")
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "hello.txt" not in output
+    assert "world.txt" not in output
+
+
+
+# Test that a directory is retained when a file deep inside it matches the search.
+def test_search_deep_nested_match(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    source = root / "src"
+    source.mkdir()
+
+    nested = source / "components"
+    nested.mkdir()
+
+    (nested / "important.py").write_text("print('hello')")
+
+    tree = DirectoryTree(root, search="important")
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "src/" in output
+    assert "components/" in output
+    assert "important.py" in output
+
+
+
+# Test that files-only mode still finds matching files inside directories.
+def test_files_only_with_search(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    source = root / "src"
+    source.mkdir()
+
+    (source / "main.py").write_text("print('hello')")
+    (source / "notes.txt").write_text("notes")
+
+    tree = DirectoryTree(
+        root,
+        files_only=True,
+        search="main",
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "main.py" in output
+    assert "notes.txt" not in output
+    assert "src/" not in output
+
+
+
+# Test that dirs-only mode can be combined with searching.
+def test_dirs_only_with_search(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    matching = root / "important_folder"
+    matching.mkdir()
+
+    other = root / "other_folder"
+    other.mkdir()
+
+    (other / "important.txt").write_text("hello")
+
+    tree = DirectoryTree(
+        root,
+        dirs_only=True,
+        search="important_folder",
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "important_folder/" in output
+    assert "other_folder/" not in output
+
+
+
+# Test that the type filter is case-insensitive.
+def test_type_filter_case_insensitive(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / "main.py").write_text("print('hello')")
+
+    tree = DirectoryTree(
+        root,
+        type_filter="PYTHON",
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "main.py" in output
+
+
+
+# Test that directories containing a matching file type are retained.
+def test_type_filter_nested_directory(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    source = root / "src"
+    source.mkdir()
+
+    (source / "main.py").write_text("print('hello')")
+    (source / "notes.txt").write_text("notes")
+
+    docs = root / "docs"
+    docs.mkdir()
+
+    (docs / "README.md").write_text("# README")
+
+    tree = DirectoryTree(
+        root,
+        type_filter="Python",
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "src/" in output
+    assert "main.py" in output
+    assert "docs/" not in output
+    assert "README.md" not in output
+
+
+
+# Test that a type filter with no matching files produces no files.
+def test_type_filter_no_matches(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / "notes.txt").write_text("notes")
+    (root / "README.md").write_text("# README")
+
+    tree = DirectoryTree(
+        root,
+        type_filter="Python",
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "notes.txt" not in output
+    assert "README.md" not in output
+
+
+
+# Test that type filtering can be combined with files-only mode.
+def test_type_filter_with_files_only(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    source = root / "src"
+    source.mkdir()
+
+    (source / "main.py").write_text("print('hello')")
+    (source / "notes.txt").write_text("notes")
+
+    tree = DirectoryTree(
+        root,
+        files_only=True,
+        type_filter="Python",
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "main.py" in output
+    assert "notes.txt" not in output
+    assert "src/" not in output
+
+
+
+# Test that type filtering can be combined with hidden files.
+def test_type_filter_with_hidden_files(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / ".hidden.py").write_text("print('hidden')")
+    (root / "main.py").write_text("print('visible')")
+
+    tree = DirectoryTree(
+        root,
+        type_filter="Python",
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "main.py" in output
+    assert ".hidden.py" not in output
+
+
+
+# Test that hidden directories are excluded by default.
+def test_hidden_directory_excluded(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    hidden = root / ".hidden"
+    hidden.mkdir()
+
+    (hidden / "secret.txt").write_text("secret")
+
+    tree = DirectoryTree(root)
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert ".hidden" not in output
+    assert "secret.txt" not in output
+
+
+
+# Test that hidden directories are displayed when hidden mode is enabled.
+def test_hidden_directory_included(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    hidden = root / ".hidden"
+    hidden.mkdir()
+
+    (hidden / "secret.txt").write_text("secret")
+
+    tree = DirectoryTree(
+        root,
+        hidden=True,
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert ".hidden/" in output
+    assert "secret.txt" in output
+
+
+
+# Test that a hidden directory containing a search match is only shown when hidden mode is enabled.
+def test_hidden_directory_with_search(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    hidden = root / ".hidden"
+    hidden.mkdir()
+
+    (hidden / "important.txt").write_text("important")
+
+    tree = DirectoryTree(
+        root,
+        search="important",
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert ".hidden" not in output
+
+    tree = DirectoryTree(
+        root,
+        hidden=True,
+        search="important",
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert ".hidden/" in output
+    assert "important.txt" in output
+
+
+
+# Test that modified time information is displayed when requested.
+def test_modified_time_display(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / "file.txt").write_text("hello")
+
+    tree = DirectoryTree(
+        root,
+        modified=True,
+    )
+    tree.generate()
+
+    output = capsys.readouterr().out
+
+    assert "[Modified:" in output
+    assert "file.txt" in output
+
+
+
+# Test that get_modified_time returns Unavailable when stat raises an OSError.
+def test_modified_time_unavailable(monkeypatch, tmp_path):
+    file = tmp_path / "file.txt"
+    file.write_text("hello")
+
+    original_stat = pathlib.Path.stat
+
+    def raise_os_error(self):
+        if self == file:
+            raise OSError("Permission denied")
+
+        return original_stat(self)
+
+    monkeypatch.setattr(
+        pathlib.Path,
+        "stat",
+        raise_os_error,
+    )
+
+    assert get_modified_time(file) == "Unavailable"
+
+
+# Test that statistics handle a directory that cannot be accessed.
+def test_build_statistics_inaccessible_directory(monkeypatch, tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    blocked = root / "blocked"
+    blocked.mkdir()
+
+    original_iterdir = pathlib.Path.iterdir
+
+    def raise_for_blocked(self):
+        if self == blocked:
+            raise PermissionError("Permission denied")
+
+        return original_iterdir(self)
+
+    monkeypatch.setattr(
+        pathlib.Path,
+        "iterdir",
+        raise_for_blocked,
+    )
+
+    generator = _TreeGenerator(root)
+
+    statistics = generator._build_statistics(root)
+
+    assert statistics["files"] == 0
+    assert statistics["directories"] == 1
+
+
+
+# Test that the tree generator skips an inaccessible directory without crashing.
+def test_tree_inaccessible_directory(monkeypatch, tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    blocked = root / "blocked"
+    blocked.mkdir()
+
+    original_iterdir = pathlib.Path.iterdir
+
+    def raise_for_blocked(self):
+        if self == blocked:
+            raise PermissionError("Permission denied")
+
+        return original_iterdir(self)
+
+    monkeypatch.setattr(
+        pathlib.Path,
+        "iterdir",
+        raise_for_blocked,
+    )
+
+    generator = _TreeGenerator(root)
+
+    tree = generator.build_tree()
+
+    assert "project/" in tree
+    assert any("blocked/" in entry for entry in tree)
+
+
+# Test that statistics continue safely when a file disappears before stat is called.
+def test_statistics_file_stat_error(monkeypatch, tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    file = root / "file.txt"
+    file.write_text("hello")
+
+    original_stat = pathlib.Path.stat
+
+    def raise_for_file(self):
+        if self == file:
+            raise OSError("File disappeared")
+
+        return original_stat(self)
+
+    monkeypatch.setattr(
+        pathlib.Path,
+        "stat",
+        raise_for_file,
+    )
+
+    generator = _TreeGenerator(root)
+
+    statistics = generator._build_statistics(root)
+
+    assert statistics["files"] == 1
+    assert statistics["total_size"] == 0
+    assert statistics["file_types"]["Text"]["count"] == 1
+    assert statistics["file_types"]["Text"]["size"] == 0
+
+
+
+# Test that a symlink is skipped instead of being recursively followed.
+def test_symlink_is_skipped(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    folder = root / "folder"
+    folder.mkdir()
+
+    (folder / "file.txt").write_text("hello")
+
+    link = root / "link"
+
+    try:
+        link.symlink_to(folder, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symbolic links are not available")
+
+    generator = _TreeGenerator(root)
+
+    tree = generator.build_tree()
+
+    assert any("folder/" in entry for entry in tree)
+    assert not any("link" in entry for entry in tree)
+
+
+
+# Test that a self-referencing symlink cannot cause recursive traversal.
+def test_self_referencing_symlink_is_skipped(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    loop = root / "loop"
+
+    try:
+        loop.symlink_to(root, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symbolic links are not available")
+
+    generator = _TreeGenerator(root)
+
+    tree = generator.build_tree()
+
+    assert "project/" in tree
+    assert not any("loop" in entry for entry in tree)
+
+
+
+# Test that statistics do not count files through a symbolic link.
+def test_statistics_skip_symlink(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    folder = root / "folder"
+    folder.mkdir()
+
+    (folder / "file.txt").write_text("hello")
+
+    link = root / "link"
+
+    try:
+        link.symlink_to(folder, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symbolic links are not available")
+
+    generator = _TreeGenerator(root)
+
+    statistics = generator._build_statistics(root)
+
+    assert statistics["files"] == 1
+    assert statistics["directories"] == 1
+
+
+
+# Test that JSON generation skips symbolic links instead of following them.
+def test_json_tree_skip_symlink(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    folder = root / "folder"
+    folder.mkdir()
+
+    (folder / "file.txt").write_text("hello")
+
+    link = root / "link"
+
+    try:
+        link.symlink_to(folder, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symbolic links are not available")
+
+    generator = _TreeGenerator(root)
+
+    tree = generator._build_json_tree(root)
+
+    names = [child["name"] for child in tree["children"]]
+
+    assert "folder" in names
+    assert "link" not in names
+
+
+
+# Test that statistics with --size include both file counts and total sizes for each file type.
+def test_statistics_with_size(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    first = root / "one.txt"
+    second = root / "two.txt"
+
+    first.write_bytes(b"a" * 100)
+    second.write_bytes(b"b" * 200)
+
+    generator = _TreeGenerator(root, show_size=True)
+
+    statistics = generator._build_statistics(root)
+
+    assert statistics["file_types"]["Text"]["count"] == 2
+    assert statistics["file_types"]["Text"]["size"] == 300
+    assert statistics["total_size"] == 300
+
+
+
+# Test that statistics respect the search filter when calculating file counts and sizes.
+def test_statistics_search_with_size(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    matching = root / "important.txt"
+    other = root / "other.txt"
+
+    matching.write_bytes(b"a" * 100)
+    other.write_bytes(b"b" * 200)
+
+    generator = _TreeGenerator(
+        root,
+        search="important",
+    )
+
+    statistics = generator._build_statistics(root)
+
+    assert statistics["files"] == 1
+    assert statistics["total_size"] == 100
+    assert statistics["file_types"]["Text"]["count"] == 1
+    assert statistics["file_types"]["Text"]["size"] == 100
