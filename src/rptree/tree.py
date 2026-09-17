@@ -329,7 +329,10 @@ class _TreeGenerator:
         if self._depth is not None and current_depth >= self._depth:
             return
 
-        entries = list(directory.iterdir())
+        try:
+            entries = list(directory.iterdir())
+        except PermissionError:
+            return
 
         # Sort directories before files, then sort alphabetically.
         entries = sorted(
@@ -736,16 +739,52 @@ class _TreeGenerator:
             "file_types": {},
         }
 
-        entries = sorted(
-            directory.iterdir(),
-            key=lambda entry: (entry.is_file(), entry.name.lower()),
-        )
+        try:
+            entries = list(directory.iterdir())
+        except OSError:
+            # Skip directories that cannot be accessed or no longer exist.
+            return statistics
+
+        # Remove symbolic links before doing any further checks.
+        # Symbolic links can point back to a parent directory and create
+        # recursive directory structures.
+        safe_entries = []
+
+        for entry in entries:
+            try:
+                if entry.is_symlink():
+                    continue
+            except OSError:
+                continue
+
+            safe_entries.append(entry)
+
+        entries = safe_entries
+
+        # Sort directories before files, then sort alphabetically.
+        # Files may disappear while the directory is being scanned, so
+        # protect the file-type check from filesystem errors.
+        def sort_key(entry: pathlib.Path) -> tuple[bool, str]:
+            try:
+                is_file = entry.is_file()
+            except OSError:
+                is_file = False
+
+            return (is_file, entry.name.lower())
+
+        entries = sorted(entries, key=sort_key)
 
         # --files still needs to enter directories so nested files
         # can be found. The directories themselves are not counted.
         if self._files_only and not self._dirs_only:
             for entry in entries:
-                if entry.is_dir():
+
+                try:
+                    is_directory = entry.is_dir()
+                except OSError:
+                    continue
+
+                if is_directory:
                     nested_statistics = self._build_statistics(entry)
 
                     statistics["files"] += nested_statistics["files"]
@@ -759,7 +798,14 @@ class _TreeGenerator:
 
                 elif entry in self._get_visible_entries(entries):
                     statistics["files"] += 1
-                    statistics["total_size"] += entry.stat().st_size
+
+                    try:
+                        statistics["total_size"] += entry.stat().st_size
+                    except OSError:
+                        # The file may have disappeared, become inaccessible,
+                        # or caused another filesystem error after the directory
+                        # was scanned.
+                        pass
 
                     file_type = get_file_type(entry)
 
@@ -774,20 +820,34 @@ class _TreeGenerator:
 
         # Apply the same recursive search behaviour as the normal tree.
         if self._search is not None:
-            visible_entries = [
-                entry
-                for entry in visible_entries
+            filtered_entries = []
+
+            for entry in visible_entries:
+                try:
+                    is_file = entry.is_file()
+                    is_directory = entry.is_dir()
+                except OSError:
+                    continue
+
                 if (
-                    entry.is_file() and self._matches_search(entry)
-                )
-                or (
-                    entry.is_dir()
+                    is_file
+                    and self._matches_search(entry)
+                ) or (
+                    is_directory
                     and self._directory_contains_match(entry)
-                )
-            ]
+                ):
+                    filtered_entries.append(entry)
+
+            visible_entries = filtered_entries
 
         for entry in visible_entries:
-            if entry.is_dir():
+
+            try:
+                is_directory = entry.is_dir()
+            except OSError:
+                continue
+
+            if is_directory:
                 statistics["directories"] += 1
 
                 # Recursively collect statistics from this directory.
@@ -806,9 +866,15 @@ class _TreeGenerator:
 
             else:
                 statistics["files"] += 1
-                statistics["total_size"] += entry.stat().st_size
 
-                # Count how many files belong to each recognised file type.
+                try:
+                    statistics["total_size"] += entry.stat().st_size
+                except OSError:
+                    # The file may have disappeared, become inaccessible,
+                    # or caused another filesystem error after the directory
+                    # was scanned.
+                    pass
+
                 file_type = get_file_type(entry)
 
                 statistics["file_types"][file_type] = (
