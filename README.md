@@ -2,7 +2,9 @@
 
 A Python command-line tool that generates a tree diagram of files and directories.
 
-`rptree` recursively explores a directory and displays its structure in a simple tree format. It supports depth limits, file and directory filtering, hidden files and directories, file information, searching, JSON output, statistics, and file type filtering.
+`rptree` recursively explores a directory and displays its structure in a simple tree format. It supports depth limits, file and directory filtering, hidden files and directories, file information, searching, JSON output, statistics, file type filtering, and saving output to files.
+
+**Current version: v1.7.6**
 
 ## Features
 
@@ -19,7 +21,7 @@ A Python command-line tool that generates a tree diagram of files and directorie
 * Search for files and directories
 * Display file modification times
 * Generate JSON output
-* Save output to a file
+* Save any generated output to a file
 * Generate directory statistics
 * Command-line interface
 * Version information
@@ -119,6 +121,12 @@ Check the installation with:
 rptree --version
 ```
 
+Example:
+
+```text
+rptree v1.7.6
+```
+
 This installation method keeps `rptree` isolated from the system Python environment while making the command available globally.
 
 ## Development Installation
@@ -193,7 +201,7 @@ For example:
 rptree ~/Projects
 ```
 
-### Windows paths
+## Windows paths
 
 On Windows, provide the directory path as normal:
 
@@ -203,7 +211,7 @@ rptree C:\Users\YourName\Projects
 
 ## Command Options
 
-## Version
+### Version
 
 To display the installed version:
 
@@ -220,10 +228,10 @@ rptree -v
 Example output:
 
 ```text
-rptree v1.7.1
+rptree v1.7.6
 ```
 
-## Help
+### Help
 
 To display all available command-line options:
 
@@ -468,17 +476,47 @@ File information such as type, size, and modification time can also be included 
 
 ### `--output`
 
-Save the generated output to a file.
+Save the generated output to a file instead of displaying it in the terminal.
 
-For example:
+```bash
+rptree --output tree.txt
+```
+
+`--output` can be used with any of the available `rptree` options.
+
+For example, save a normal tree:
+
+```bash
+rptree --output tree.txt
+```
+
+Save JSON output:
 
 ```bash
 rptree --json --output tree.json
 ```
 
-This generates the JSON tree and writes it to `tree.json`.
+Save statistics:
 
-`--output` can be combined with the other output-related options.
+```bash
+rptree --stats --output stats.txt
+```
+
+Save statistics including file sizes:
+
+```bash
+rptree --stats --size --output stats.txt
+```
+
+It can also be combined with normal tree options:
+
+```bash
+rptree --hidden --type --size --modified --output report.txt
+```
+
+When `--output` is not specified, output continues to be displayed in the terminal.
+
+If the specified output file already exists, it is overwritten with the new output.
 
 ### `--stats`
 
@@ -491,15 +529,19 @@ rptree --stats
 Example output:
 
 ```text
+=====================================================
+Repository-Tree-Graph/
+
 Files.     :  2061
 Directories:  313
 Total size :  24.6 MB
- 
+
 File types:
   Python     : 869
   Text       : 21
   JSON       : 2
   Unknown    : 1163
+=====================================================
 ```
 
 Statistics include:
@@ -512,7 +554,23 @@ Statistics include:
 
 File types are ordered by frequency, with unknown file types displayed last.
 
-### Combining options
+The `--size` option can be combined with `--stats` to display the total size for each file type:
+
+```bash
+rptree --stats --size
+```
+
+Example:
+
+```text
+File types:
+  Python     : 869    [12.4 MB]
+  Text       : 21     [42.1 KB]
+  JSON       : 2      [8.2 KB]
+  Unknown    : 1163   [6.7 MB]
+```
+
+## Combining options
 
 The options can be combined.
 
@@ -560,6 +618,18 @@ You can also combine type filtering with JSON output:
 rptree --type-filter Python --json
 ```
 
+Output can be saved regardless of the options being used:
+
+```bash
+rptree --search test --type-filter Python --output results.txt
+```
+
+or:
+
+```bash
+rptree --type --size --modified --output report.txt
+```
+
 ## Testing
 
 The project uses `pytest` for automated testing.
@@ -576,7 +646,7 @@ Run the complete test suite with:
 pytest
 ```
 
-The current test suite contains **135 tests** covering functionality including:
+The test suite covers functionality including:
 
 * Tree generation
 * Directory traversal
@@ -593,12 +663,16 @@ The current test suite contains **135 tests** covering functionality including:
 * File searching
 * Nested directories
 * JSON output
-* Output files
-* Directory statistics
+* Output file generation
+* Output file overwriting
+* Statistics output
+* Statistics with file sizes
 * File type statistics
 * Command-line arguments
 * Combined options
 * Helper functions
+* Error handling and filesystem edge cases
+* Symbolic link handling
 
 ## Project Structure
 
@@ -641,6 +715,8 @@ Handles the command-line interface, including arguments such as:
 --output
 --stats
 ```
+
+It also handles directing generated output to either the terminal or a specified output file.
 
 ### `tree.py`
 
