@@ -26,6 +26,17 @@ def main():
         args.stats,
     )
 
+
+def write_output(content: str, output: str | None) -> None:
+    """Print output to the terminal or write it to a file."""
+
+    if output:
+        with open(output, "w") as file:
+            file.write(content)
+    else:
+        print(content)
+
+
 def generate_tree(
     root_dir,
     depth,
@@ -66,20 +77,26 @@ def generate_tree(
 
     if stats:
         statistics = tree._generator._build_statistics(root_dir)
-        print()
-        print("=====================================================")
-        print(f"{root_dir.resolve().name}{os.sep}")
-        print()
-        print(f"Files.     :  {statistics['files']}")
-        print(f"Directories:  {statistics['directories']}")
-        print(f"Total size :  {format_size(statistics['total_size'])}")
-        print()
-        print("File types:")
+
+        stats_output = []
+
+        stats_output.append("")
+        stats_output.append("=====================================================")
+        stats_output.append(f"{root_dir.resolve().name}{os.sep}")
+        stats_output.append("")
+        stats_output.append(f"Files.     :  {statistics['files']}")
+        stats_output.append(f"Directories:  {statistics['directories']}")
+        stats_output.append(
+            f"Total size :  {format_size(statistics['total_size'])}"
+        )
+        stats_output.append("")
+        stats_output.append("File types:")
 
         if statistics["file_types"]:
 
             longest_type = max(
-                len(file_type) for file_type in statistics["file_types"]
+                len(file_type)
+                for file_type in statistics["file_types"]
             )
 
             sorted_file_types = sorted(
@@ -92,21 +109,25 @@ def generate_tree(
             )
 
             for file_type, data in sorted_file_types:
+
                 if show_size:
-                    print(
+                    stats_output.append(
                         f"  {file_type:<{longest_type}} : "
                         f"{data['count']:<7}"
                         f"[{format_size(data['size'])}]"
                     )
                 else:
-                    print(
+                    stats_output.append(
                         f"  {file_type:<{longest_type}} : "
                         f"{data['count']}"
                     )
-        print("=====================================================")
-        print()
 
-        return 
+        stats_output.append("=====================================================")
+        stats_output.append("")
+
+        write_output("\n".join(stats_output), output)
+
+        return
 
     
     if json_output:
@@ -115,14 +136,12 @@ def generate_tree(
             indent=4,
         )
 
-        if output:
-            with open(output, "w") as file:
-                file.write(json_data)
-        else:
-            print(json_data)
+        write_output(json_data, output)
 
     else:
-        tree.generate()
+        tree_output = tree.get_output()
+
+        write_output(tree_output, output)
 
 
 

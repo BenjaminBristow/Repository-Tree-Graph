@@ -3,13 +3,14 @@ from importlib.metadata import version
 from datetime import datetime
 import json
 import pathlib
+from rptree.cli import generate_tree
 from rptree.tree import (
     DirectoryTree,
     _TreeGenerator,
     get_file_type, 
     get_file_size, 
     get_modified_time,
-    format_size
+    format_size,
 )
 
 
@@ -3702,3 +3703,433 @@ def test_statistics_search_with_size(tmp_path):
     assert statistics["total_size"] == 100
     assert statistics["file_types"]["Text"]["count"] == 1
     assert statistics["file_types"]["Text"]["size"] == 100
+
+
+
+# Test that normal tree output can be written to a file.
+def test_cli_output_file(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    file = root / "main.py"
+    file.write_text("print('hello')")
+
+    output_file = tmp_path / "tree.txt"
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        False,
+        None,
+        False,
+        None,
+        False,
+        False,
+        str(output_file),
+        False,
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert output_file.exists()
+
+    output = output_file.read_text()
+
+    assert "project/" in output
+    assert "main.py" in output
+
+
+
+# Test that normal tree output written to a file contains the same tree content.
+def test_cli_output_file_with_options(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    file = root / "main.py"
+    file.write_text("print('hello')")
+
+    output_file = tmp_path / "tree.txt"
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        True,
+        None,
+        True,
+        None,
+        False,
+        False,
+        str(output_file),
+        False,
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+
+    output = output_file.read_text()
+
+    assert "main.py" in output
+    assert "[Python]" in output
+    assert "[Modified:" not in output
+
+
+
+# Test that JSON output can be written to a file.
+def test_cli_json_output_file(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    file = root / "main.py"
+    file.write_text("print('hello')")
+
+    output_file = tmp_path / "tree.json"
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        False,
+        None,
+        False,
+        None,
+        False,
+        True,
+        str(output_file),
+        False,
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert output_file.exists()
+
+    output = output_file.read_text()
+
+    assert '"name": "project"' in output
+    assert '"type": "directory"' in output
+    assert '"name": "main.py"' in output
+    assert '"type": "file"' in output
+
+
+
+# Test that JSON output written to a file is valid JSON.
+def test_cli_json_output_file_is_valid_json(tmp_path, capsys):
+    import json
+
+    root = tmp_path / "project"
+    root.mkdir()
+
+    file = root / "main.py"
+    file.write_text("print('hello')")
+
+    output_file = tmp_path / "tree.json"
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        False,
+        None,
+        False,
+        None,
+        False,
+        True,
+        str(output_file),
+        False,
+    )
+
+    capsys.readouterr()
+
+    output = output_file.read_text()
+    data = json.loads(output)
+
+    assert data["name"] == "project"
+    assert data["type"] == "directory"
+    assert data["children"][0]["name"] == "main.py"
+
+
+
+# Test that statistics output can be written to a file.
+def test_cli_stats_output_file(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    file = root / "main.py"
+    file.write_text("print('hello')")
+
+    output_file = tmp_path / "stats.txt"
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        False,
+        None,
+        False,
+        None,
+        False,
+        False,
+        str(output_file),
+        True,
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert output_file.exists()
+
+    output = output_file.read_text()
+
+    assert "project/" in output
+    assert "Files." in output
+    assert "Directories:" in output
+    assert "Total size :" in output
+    assert "File types:" in output
+    assert "Python" in output
+
+
+
+# Test that statistics output with file sizes can be written to a file.
+def test_cli_stats_size_output_file(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    file = root / "main.py"
+    file.write_text("print('hello')")
+
+    output_file = tmp_path / "stats.txt"
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        False,
+        None,
+        True,
+        None,
+        False,
+        False,
+        str(output_file),
+        True,
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+
+    output = output_file.read_text()
+
+    assert "File types:" in output
+    assert "Python" in output
+    assert "[" in output
+    assert "]" in output
+
+
+
+# Test that an existing output file is overwritten rather than appended to.
+def test_cli_output_file_is_overwritten(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    file = root / "main.py"
+    file.write_text("print('hello')")
+
+    output_file = tmp_path / "tree.txt"
+    output_file.write_text("OLD CONTENT")
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        False,
+        None,
+        False,
+        None,
+        False,
+        False,
+        str(output_file),
+        False,
+    )
+
+    capsys.readouterr()
+
+    output = output_file.read_text()
+
+    assert "OLD CONTENT" not in output
+    assert "project/" in output
+    assert "main.py" in output
+
+
+
+# Test that output files are created when the requested path does not exist.
+def test_cli_output_file_is_created(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    file = root / "main.py"
+    file.write_text("print('hello')")
+
+    output_directory = tmp_path / "output"
+    output_file = output_directory / "tree.txt"
+
+    output_directory.mkdir()
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        False,
+        None,
+        False,
+        None,
+        False,
+        False,
+        str(output_file),
+        False,
+    )
+
+    capsys.readouterr()
+
+    assert output_file.exists()
+    assert output_file.read_text() != ""
+
+
+
+# Test that search options still work when the tree is written to a file.
+def test_cli_output_file_with_search(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    matching_file = root / "database.py"
+    matching_file.write_text("")
+
+    unrelated_file = root / "main.py"
+    unrelated_file.write_text("")
+
+    output_file = tmp_path / "tree.txt"
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        False,
+        None,
+        False,
+        "database",
+        False,
+        False,
+        str(output_file),
+        False,
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+
+    output = output_file.read_text()
+
+    assert "database.py" in output
+    assert "main.py" not in output
+
+
+
+# Test that type filtering still works when the tree is written to a file.
+def test_cli_output_file_with_type_filter(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    python_file = root / "main.py"
+    python_file.write_text("")
+
+    text_file = root / "notes.txt"
+    text_file.write_text("")
+
+    output_file = tmp_path / "tree.txt"
+
+    generate_tree(
+        root,
+        None,
+        False,
+        False,
+        False,
+        False,
+        "Python",
+        False,
+        None,
+        False,
+        False,
+        str(output_file),
+        False,
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+
+    output = output_file.read_text()
+
+    assert "main.py" in output
+    assert "notes.txt" not in output
+
+
+
+# Test that depth limiting still works when the tree is written to a file.
+def test_cli_output_file_with_depth(tmp_path, capsys):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    source = root / "src"
+    source.mkdir()
+
+    file = source / "main.py"
+    file.write_text("")
+
+    output_file = tmp_path / "tree.txt"
+
+    generate_tree(
+        root,
+        1,
+        False,
+        False,
+        False,
+        False,
+        None,
+        False,
+        None,
+        False,
+        False,
+        str(output_file),
+        False,
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+
+    output = output_file.read_text()
+
+    assert "project/" in output
+    assert "src/" in output
+    assert "main.py" not in output

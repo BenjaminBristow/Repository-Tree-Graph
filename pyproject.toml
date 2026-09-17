@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rptree"
-version = "1.7.5"
+version = "1.7.6"
 description = "A command-line tool that generates a tree diagram of files and directories."
 readme = "README.md"
 requires-python = ">=3.10"

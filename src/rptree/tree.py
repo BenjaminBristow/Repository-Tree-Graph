@@ -265,11 +265,16 @@ class DirectoryTree:
 
         tree = self._generator.build_tree()
 
-        # build_tree() returns each line separately, so print each
-        # line to create the final tree in the terminal.
         for entry in tree:
             print(entry)
 
+
+    def get_output(self) -> str:
+        """Build the directory tree and return it as a string."""
+
+        tree = self._generator.build_tree()
+
+        return "\n".join(tree)
 
 class _TreeGenerator:
     """Build the tree representation of a directory."""
