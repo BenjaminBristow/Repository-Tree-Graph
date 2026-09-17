@@ -12,6 +12,15 @@ PIPE_PREFIX = "│   "
 SPACE_PREFIX = "    "
 ELLIPSIS = "..."
 
+DEFAULT_HIDDEN_DIRECTORIES = {
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".nox",
+    "rptree.egg-info",
+}
 
 # Maps file extensions to human-readable file types.
 # This is used by the --type option and file statistics.
@@ -652,8 +661,15 @@ class _TreeGenerator:
                 # The entry may have disappeared or become inaccessible.
                 continue
 
-            # Hidden files/directories are excluded unless --hidden is enabled.
-            if not self._hidden and entry.name.startswith("."):
+            # Hidden files/directories and default-hidden directories are excluded
+            # unless --hidden is enabled.
+            if (
+                not self._hidden
+                and (
+                    entry.name.startswith(".")
+                    or entry.name in DEFAULT_HIDDEN_DIRECTORIES
+                )
+            ):
                 continue
 
             # --files means directories are hidden from the output.
