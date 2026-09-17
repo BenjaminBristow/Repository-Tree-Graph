@@ -77,6 +77,7 @@ def generate_tree(
         print("File types:")
 
         if statistics["file_types"]:
+
             longest_type = max(
                 len(file_type) for file_type in statistics["file_types"]
             )
@@ -85,15 +86,23 @@ def generate_tree(
                 statistics["file_types"].items(),
                 key=lambda item: (
                     item[0] == "Unknown",
-                    -item[1],
+                    -item[1]["count"],
                     item[0],
                 ),
             )
 
-            for file_type, count in sorted_file_types:
-                print(
-                    f"  {file_type:<{longest_type}} : {count}"
-                )
+            for file_type, data in sorted_file_types:
+                if show_size:
+                    print(
+                        f"  {file_type:<{longest_type}} : "
+                        f"{data['count']:<7}"
+                        f"[{format_size(data['size'])}]"
+                    )
+                else:
+                    print(
+                        f"  {file_type:<{longest_type}} : "
+                        f"{data['count']}"
+                    )
         print("=====================================================")
         print()
 

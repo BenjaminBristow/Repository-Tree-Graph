@@ -219,12 +219,15 @@ def format_size(size: int) -> str:
 def get_modified_time(file: pathlib.Path) -> str:
     """Return the last modified time of a file."""
 
-    modified_time = file.stat().st_mtime
+    try:
+        modified_time = file.stat().st_mtime
+    except OSError:
+        # The file may have disappeared or become inaccessible.
+        return "Unavailable"
+
     modified_datetime = datetime.fromtimestamp(modified_time)
 
-    # Convert the timestamp into a format that is easier to read.
     return modified_datetime.strftime("%d/%m/%Y %H:%M")
-
 
 class DirectoryTree:
     """Generate and print a tree representation of a directory."""
@@ -298,6 +301,7 @@ class _TreeGenerator:
         # The tree is built as a list of strings before being printed.
         self._tree: list[str] = []
 
+
     def build_tree(self) -> list[str]:
         """Build the complete directory tree."""
 
@@ -307,15 +311,19 @@ class _TreeGenerator:
 
         return self._tree
 
+
     def _tree_head(self) -> None:
         """Add the root directory to the tree."""
 
-        # resolve() gives us the actual directory name even when the user
-        # runs rptree against "." where Path(".").name would be empty.
-        root_name = self._root_dir.resolve().name
+        try:
+            root_name = self._root_dir.resolve().name
+        except OSError:
+            # Use the original directory name if the path cannot be resolved.
+            root_name = self._root_dir.name
 
         self._tree.append(f"{root_name}{os.sep}")
         self._tree.append(PIPE)
+
 
     def _tree_body(
         self,
@@ -331,50 +339,100 @@ class _TreeGenerator:
 
         try:
             entries = list(directory.iterdir())
-        except PermissionError:
+        except OSError:
+            # Skip directories that cannot be accessed.
             return
 
+        # Remove symbolic links before doing any further checks.
+        # Symbolic links can point back to a parent directory and create
+        # recursive directory structures.
+        safe_entries = []
+
+        for entry in entries:
+            try:
+                if entry.is_symlink():
+                    continue
+            except OSError:
+                continue
+
+            safe_entries.append(entry)
+
+        entries = safe_entries
+
         # Sort directories before files, then sort alphabetically.
+        # Files may disappear while the directory is being scanned, so
+        # protect the file-type check from filesystem errors.
+        def sort_key(entry: pathlib.Path) -> tuple[bool, str]:
+            try:
+                is_file = entry.is_file()
+            except OSError:
+                is_file = False
+
+            return (is_file, entry.name.lower())
+
         entries = sorted(
             entries,
-            key=lambda entry: (entry.is_file(), entry.name.lower()),
+            key=sort_key,
         )
 
         # Apply options such as --hidden, --files and --dirs.
         visible_entries = self._get_visible_entries(entries)
 
         if self._search is not None:
-            visible_entries = [
-                entry
-                for entry in visible_entries
+            filtered_entries = []
+
+            for entry in visible_entries:
+
+                try:
+                    is_file = entry.is_file()
+                    is_directory = entry.is_dir()
+                except OSError:
+                    continue
+
                 if (
-                    entry.is_file() and self._matches_search(entry)
-                )
-                or (
-                    entry.is_dir()
+                    is_file
+                    and self._matches_search(entry)
+                ) or (
+                    is_directory
                     and self._directory_contains_match(entry)
-                )
-            ]
+                ):
+                    filtered_entries.append(entry)
+
+            visible_entries = filtered_entries
 
         if self._type_filter is not None:
-            visible_entries = [
-                entry
-                for entry in visible_entries
+            filtered_entries = []
+
+            for entry in visible_entries:
+
+                try:
+                    is_file = entry.is_file()
+                    is_directory = entry.is_dir()
+                except OSError:
+                    continue
+
                 if (
-                    entry.is_file() and self._matches_type_filter(entry)
-                )
-                or (
-                    entry.is_dir()
+                    is_file
+                    and self._matches_type_filter(entry)
+                ) or (
+                    is_directory
                     and self._directory_contains_type_match(entry)
-                )
-            ]
+                ):
+                    filtered_entries.append(entry)
+
+            visible_entries = filtered_entries
 
         # We iterate through the original entries rather than visible_entries.
         # This is important for --files because we still need to enter
         # directories to find files nested inside them.
         for entry in entries:
-            if entry.is_dir():
 
+            try:
+                is_directory = entry.is_dir()
+            except OSError:
+                continue
+
+            if is_directory:
                 if self._files_only and not self._dirs_only:
                     self._tree_body(
                         entry,
@@ -388,7 +446,10 @@ class _TreeGenerator:
 
             # Find the entry's position amongst the entries that will
             # actually be displayed so the correct tree connector can be used.
-            visible_index = visible_entries.index(entry)
+            try:
+                visible_index = visible_entries.index(entry)
+            except ValueError:
+                continue
 
             connector = (
                 ELBOW
@@ -396,7 +457,7 @@ class _TreeGenerator:
                 else TEE
             )
 
-            if entry.is_dir():
+            if is_directory:
                 self._add_directory(
                     entry,
                     visible_index,
@@ -412,6 +473,7 @@ class _TreeGenerator:
                     connector,
                 )
 
+
     def _should_hide(self, entry: pathlib.Path) -> bool:
         """Return whether an entry should be hidden by the current filters."""
 
@@ -422,6 +484,7 @@ class _TreeGenerator:
             return True
 
         return False
+
 
     def _add_directory(
         self,
@@ -470,6 +533,7 @@ class _TreeGenerator:
         if show_directory:
             self._tree.append(child_prefix.rstrip())
 
+
     def _add_file(
         self,
         file: pathlib.Path,
@@ -503,17 +567,19 @@ class _TreeGenerator:
             f"{prefix}{connector} {file_name}"
         )
 
+
     def _add_directory(
-        self,
-        directory: pathlib.Path,
-        index: int,
-        entries_count: int,
-        prefix: str,
-        connector: str,
-        current_depth: int,
-    ) -> None:
+    self,
+    directory: pathlib.Path,
+    index: int,
+    entries_count: int,
+    prefix: str,
+    connector: str,
+    current_depth: int,
+) -> None:
         """Add a directory and recursively add its contents."""
 
+        # Directories are normally displayed, but --files hides them.
         show_directory = not self._files_only or self._dirs_only
 
         if show_directory:
@@ -521,6 +587,8 @@ class _TreeGenerator:
                 f"{prefix}{connector} {directory.name}{os.sep}"
             )
 
+        # Decide whether the children need a vertical pipe depending on
+        # whether this directory is the last visible entry at its level.
         if index != entries_count - 1:
             child_prefix = prefix + PIPE_PREFIX
         else:
@@ -528,21 +596,33 @@ class _TreeGenerator:
 
         next_depth = current_depth + 1
 
+        # If the next level would exceed the requested depth, stop here.
         if self._depth is not None and next_depth >= self._depth:
-            if any(directory.iterdir()):
+
+            try:
+                has_children = any(directory.iterdir())
+            except OSError:
+                # The directory may be inaccessible or may no longer exist.
+                has_children = False
+
+            if has_children:
                 self._tree.append(
                     f"{child_prefix}{SPACE_PREFIX}{ELLIPSIS}"
                 )
+
             return
 
+        # Recursively build this directory's contents.
         self._tree_body(
-            directory,
-            child_prefix,
-            next_depth,
+            directory=directory,
+            prefix=child_prefix,
+            current_depth=next_depth,
         )
 
+        # Add spacing after a directory to keep the tree visually structured.
         if show_directory:
             self._tree.append(child_prefix.rstrip())
+
 
     def _get_visible_entries(
         self,
@@ -550,31 +630,44 @@ class _TreeGenerator:
     ) -> list[pathlib.Path]:
         """Return entries that should be displayed."""
 
-        # Hidden files/directories are excluded unless --hidden is enabled.
-        if not self._hidden:
-            entries = [
-                entry
-                for entry in entries
-                if not entry.name.startswith(".")
-            ]
+        safe_entries = []
 
-        # --files means directories are hidden from the output.
-        if self._files_only and not self._dirs_only:
-            return [
-                entry
-                for entry in entries
-                if entry.is_file()
-            ]
+        for entry in entries:
 
-        # --dirs means files are hidden from the output.
-        if self._dirs_only and not self._files_only:
-            return [
-                entry
-                for entry in entries
-                if entry.is_dir()
-            ]
+            try:
+                # Do not follow symbolic links because they can create
+                # recursive directory structures or point outside the tree.
+                if entry.is_symlink():
+                    continue
 
-        return entries
+                is_file = entry.is_file()
+                is_directory = entry.is_dir()
+
+            except OSError:
+                # The entry may have disappeared or become inaccessible.
+                continue
+
+            # Hidden files/directories are excluded unless --hidden is enabled.
+            if not self._hidden and entry.name.startswith("."):
+                continue
+
+            # --files means directories are hidden from the output.
+            if self._files_only and not self._dirs_only:
+                if is_file:
+                    safe_entries.append(entry)
+
+                continue
+
+            # --dirs means files are hidden from the output.
+            if self._dirs_only and not self._files_only:
+                if is_directory:
+                    safe_entries.append(entry)
+
+                continue
+
+            safe_entries.append(entry)
+
+        return safe_entries
 
 
     def _matches_search(self, entry: pathlib.Path) -> bool:
@@ -593,16 +686,35 @@ class _TreeGenerator:
     ) -> bool:
         """Return whether a directory or anything inside it matches the search term."""
 
-        # A directory itself can match the search.
+        # Check whether the directory itself matches the search term.
         if self._matches_search(directory):
             return True
 
-        # Otherwise recursively search everything inside the directory.
-        for entry in directory.iterdir():
-            if entry.is_file() and self._matches_search(entry):
+        try:
+            entries = list(directory.iterdir())
+        except OSError:
+            # Skip directories that cannot be accessed.
+            return False
+
+        for entry in entries:
+
+            try:
+                # Do not follow symbolic links because they can create
+                # recursive directory structures or point outside the tree.
+                if entry.is_symlink():
+                    continue
+
+                is_file = entry.is_file()
+                is_directory = entry.is_dir()
+
+            except OSError:
+                # The entry may have disappeared or become inaccessible.
+                continue
+
+            if is_file and self._matches_search(entry):
                 return True
 
-            if entry.is_dir() and self._directory_contains_match(entry):
+            if is_directory and self._directory_contains_match(entry):
                 return True
 
         return False
@@ -614,7 +726,11 @@ class _TreeGenerator:
         if self._type_filter is None:
             return True
 
-        if not entry.is_file():
+        try:
+            if not entry.is_file():
+                return False
+        except OSError:
+            # The file may have disappeared or become inaccessible.
             return False
 
         return get_file_type(entry).lower() == self._type_filter.lower()
@@ -626,70 +742,168 @@ class _TreeGenerator:
     ) -> bool:
         """Return whether a directory contains a file matching the type filter."""
 
-        for entry in directory.iterdir():
-            if entry.is_file() and self._matches_type_filter(entry):
+        try:
+            entries = list(directory.iterdir())
+        except OSError:
+            # Skip directories that cannot be accessed.
+            return False
+
+        for entry in entries:
+
+            try:
+                # Do not follow symbolic links because they can create
+                # recursive directory structures or point outside the tree.
+                if entry.is_symlink():
+                    continue
+
+                is_file = entry.is_file()
+                is_directory = entry.is_dir()
+
+            except OSError:
+                # The entry may have disappeared or become inaccessible.
+                continue
+
+            if is_file and self._matches_type_filter(entry):
                 return True
 
-            if entry.is_dir() and self._directory_contains_type_match(entry):
+            if is_directory and self._directory_contains_type_match(entry):
                 return True
 
         return False
 
 
-    def _build_json_tree(
-        self,
-        directory: pathlib.Path,
-    ) -> dict:
+    def _build_json_tree(self, directory: pathlib.Path) -> dict:
         """Build a dictionary representing a directory tree."""
 
-        # JSON represents the tree using nested dictionaries instead of
-        # the visual characters used by the terminal output.
         tree = {
             "name": directory.resolve().name,
             "type": "directory",
             "children": [],
         }
 
+        try:
+            entries = list(directory.iterdir())
+        except OSError:
+            # Skip directories that cannot be accessed.
+            return tree
+
+        # Remove symbolic links before doing any further checks.
+        # Symbolic links can point back to a parent directory and create
+        # recursive directory structures.
+        safe_entries = []
+
+        for entry in entries:
+
+            try:
+                if entry.is_symlink():
+                    continue
+            except OSError:
+                continue
+
+            safe_entries.append(entry)
+
+        entries = safe_entries
+
+        # Sort directories before files, then sort alphabetically.
+        # Files may disappear while the directory is being scanned, so
+        # protect the file-type check from filesystem errors.
+        def sort_key(entry: pathlib.Path) -> tuple[bool, str]:
+            try:
+                is_file = entry.is_file()
+            except OSError:
+                is_file = False
+
+            return (is_file, entry.name.lower())
+
         entries = sorted(
-            directory.iterdir(),
-            key=lambda entry: (entry.is_file(), entry.name.lower()),
+            entries,
+            key=sort_key,
         )
 
-        # Files-only JSON still needs to recursively enter directories.
-        # The directories themselves are simply not included in the result.
+        # Apply visibility filters such as --hidden, --files and --dirs.
+        visible_entries = self._get_visible_entries(entries)
+
+        # Apply recursive search filtering.
+        if self._search is not None:
+            filtered_entries = []
+
+            for entry in visible_entries:
+
+                try:
+                    is_file = entry.is_file()
+                    is_directory = entry.is_dir()
+                except OSError:
+                    continue
+
+                if (
+                    is_file
+                    and self._matches_search(entry)
+                ) or (
+                    is_directory
+                    and self._directory_contains_match(entry)
+                ):
+                    filtered_entries.append(entry)
+
+            visible_entries = filtered_entries
+
+        # Apply recursive type filtering.
+        if self._type_filter is not None:
+            filtered_entries = []
+
+            for entry in visible_entries:
+
+                try:
+                    is_file = entry.is_file()
+                    is_directory = entry.is_dir()
+                except OSError:
+                    continue
+
+                if (
+                    is_file
+                    and self._matches_type_filter(entry)
+                ) or (
+                    is_directory
+                    and self._directory_contains_type_match(entry)
+                ):
+                    filtered_entries.append(entry)
+
+            visible_entries = filtered_entries
+
+        # --files still needs to enter directories so that files nested
+        # inside them can be included in the JSON output.
         if self._files_only and not self._dirs_only:
+
             for entry in entries:
-                if entry.is_dir():
+
+                try:
+                    is_directory = entry.is_dir()
+                except OSError:
+                    continue
+
+                if is_directory:
                     nested_tree = self._build_json_tree(entry)
+
                     tree["children"].extend(
                         nested_tree["children"]
                     )
 
-                elif entry in self._get_visible_entries(entries):
+                elif entry in visible_entries:
                     tree["children"].append(
                         self._build_json_file(entry)
                     )
 
             return tree
 
-        visible_entries = self._get_visible_entries(entries)
-
-        # Apply the same recursive search rules used by the normal tree.
-        if self._search is not None:
-            visible_entries = [
-                entry
-                for entry in visible_entries
-                if (
-                    entry.is_file() and self._matches_search(entry)
-                )
-                or (
-                    entry.is_dir()
-                    and self._directory_contains_match(entry)
-                )
-            ]
-
+        # Build the normal JSON tree from the entries that passed
+        # all visibility and filtering checks.
         for entry in visible_entries:
-            if entry.is_dir():
+
+            try:
+                is_directory = entry.is_dir()
+            except OSError:
+                continue
+
+            if is_directory:
                 tree["children"].append(
                     self._build_json_tree(entry)
                 )
@@ -699,6 +913,7 @@ class _TreeGenerator:
                 )
 
         return tree
+
 
     def _build_json_file(
         self,
@@ -723,6 +938,7 @@ class _TreeGenerator:
             result["modified"] = get_modified_time(file)
 
         return result
+
 
     def _build_statistics(
         self,
@@ -790,28 +1006,40 @@ class _TreeGenerator:
                     statistics["files"] += nested_statistics["files"]
                     statistics["total_size"] += nested_statistics["total_size"]
 
-                    # Merge file-type counts from the nested directory.
-                    for file_type, count in nested_statistics["file_types"].items():
-                        statistics["file_types"][file_type] = (
-                            statistics["file_types"].get(file_type, 0) + count
-                        )
+                    # Merge file-type counts and sizes from the nested directory.
+                    for file_type, data in nested_statistics["file_types"].items():
+
+                        if file_type not in statistics["file_types"]:
+                            statistics["file_types"][file_type] = {
+                                "count": 0,
+                                "size": 0,
+                            }
+
+                        statistics["file_types"][file_type]["count"] += data["count"]
+                        statistics["file_types"][file_type]["size"] += data["size"]
 
                 elif entry in self._get_visible_entries(entries):
                     statistics["files"] += 1
 
                     try:
-                        statistics["total_size"] += entry.stat().st_size
+                        file_size = entry.stat().st_size
+                        statistics["total_size"] += file_size
                     except OSError:
                         # The file may have disappeared, become inaccessible,
                         # or caused another filesystem error after the directory
                         # was scanned.
-                        pass
+                        file_size = 0
 
                     file_type = get_file_type(entry)
 
-                    statistics["file_types"][file_type] = (
-                        statistics["file_types"].get(file_type, 0) + 1
-                    )
+                    if file_type not in statistics["file_types"]:
+                        statistics["file_types"][file_type] = {
+                            "count": 0,
+                            "size": 0,
+                        }
+
+                    statistics["file_types"][file_type]["count"] += 1
+                    statistics["file_types"][file_type]["size"] += file_size
 
             return statistics
 
@@ -858,27 +1086,39 @@ class _TreeGenerator:
                 statistics["directories"] += nested_statistics["directories"]
                 statistics["total_size"] += nested_statistics["total_size"]
 
-                # Merge the nested file-type counts into the current dictionary.
-                for file_type, count in nested_statistics["file_types"].items():
-                    statistics["file_types"][file_type] = (
-                        statistics["file_types"].get(file_type, 0) + count
-                    )
+                # Merge the nested file-type counts and sizes into the current dictionary.
+                for file_type, data in nested_statistics["file_types"].items():
+
+                    if file_type not in statistics["file_types"]:
+                        statistics["file_types"][file_type] = {
+                            "count": 0,
+                            "size": 0,
+                        }
+
+                    statistics["file_types"][file_type]["count"] += data["count"]
+                    statistics["file_types"][file_type]["size"] += data["size"]
 
             else:
                 statistics["files"] += 1
 
                 try:
-                    statistics["total_size"] += entry.stat().st_size
+                    file_size = entry.stat().st_size
+                    statistics["total_size"] += file_size
                 except OSError:
                     # The file may have disappeared, become inaccessible,
                     # or caused another filesystem error after the directory
                     # was scanned.
-                    pass
+                    file_size = 0
 
                 file_type = get_file_type(entry)
 
-                statistics["file_types"][file_type] = (
-                    statistics["file_types"].get(file_type, 0) + 1
-                )
+                if file_type not in statistics["file_types"]:
+                    statistics["file_types"][file_type] = {
+                        "count": 0,
+                        "size": 0,
+                    }
+
+                statistics["file_types"][file_type]["count"] += 1
+                statistics["file_types"][file_type]["size"] += file_size
 
         return statistics
